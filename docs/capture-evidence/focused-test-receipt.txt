@@ -1,0 +1,6 @@
+SHOT_API_RECEIPT={"bytes": 1476, "capture": "grim", "fallback": true, "height": 600, "mime_type": "image/png", "path": "/tmp/pytest-of-USER/pytest-81/test_shot_tool_captures_only_o0/realms/shot-xlqupcis/screen.png", "realm_id": "r-87471a9647d24b2ab259e02c", "sha256": "0e78e1e00e1b64efefcadff280b26c47573f6b85aa1a36b6d7773abfbc2088f9", "width": 800}
+..NATIVE_CURSOR_RECEIPT={"changed_pixels": [103, 103], "cleanup": "registry/runtime/cgroup/processes removed", "client_cursor_encoding": false, "difference_bbox": [159, 179, 552, 381], "outside_changed_pixels": 0, "positions": [[160, 180], [540, 360]], "realm_id": "r-e7470e67e25c46318b52939c", "transport": "private UNIX RFB raw-only"}
+.CUA_OVERLAY_RECEIPT={'overlay_requested': False, 'logical_max_pixels': [0, 0], 'desktop_max_pixels': [206, 206], 'threads': [], 'cleanup': 'registry/runtime/cgroup/processes removed'}
+.CUA_OVERLAY_RECEIPT={'overlay_requested': True, 'logical_max_pixels': [6080, 2892], 'desktop_max_pixels': [3074, 3074], 'threads': ['cua-overlay-wl'], 'cleanup': 'registry/runtime/cgroup/processes removed'}
+..........
+14 passed in 34.99s

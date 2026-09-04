@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    {
+      "severity": "informational",
+      "title": "P2-1 verified",
+      "details": "The shared 3211264-byte RPC response bound covers both 262144-byte captures at worst-case sixfold JSON expansion plus metadata. Real RPC tests passed for full-cap NUL output on both streams and mixed control/invalid-UTF-8/Unicode overflow, including exec(wait=True), completion/truncation flags, exact retained files and subsequent result retrieval. Existing retention, admission, draining and unpolled-reaping checks also passed."
+    },
+    {
+      "severity": "informational",
+      "title": "P2-2 verified",
+      "details": "Reviewed all remove_runtime callers: normal stop, guardian cleanup and ExecStopPost, starting/running/stopping/cleanup_failed reconciliation, and launcher/readiness rollback. Cleanup records stopping before deletion, preserves cleanup_failed ownership and surfaces actual filesystem errors, and removes the registry only after successful runtime deletion. Real EACCES tests passed for repeated failure and safe retry, worker/guardian crashes, recovery and startup rollback. Guardian waiting is protected by nested finally; crash tests detected no ResourceWarning. Symlink/generation rejection and outside-data permissions remain protected without blanket chmod."
+    },
+    {
+      "severity": "informational",
+      "title": "Independent evidence and scope",
+      "details": "Canonical warning-strict execution with one worker, disposable homes and zero retries passed 54 tests across 11 files, with no failures or skips. Source review and these regressions found no R1-R8 safety regression, including forwarding-time authority, Unix peer identity, systemctl fail-closed behavior, startup ownership, idle serialization and job retention. The dependency-floor listener test passed. All 57 hashes in the parent's full-suite receipt matched current files; that receipt records 112 passed, 0 failed, 5 skipped, and the separately inspected explicit driver receipt records 5 passed without skips. Driver repair/noexec behavior was source-reviewed and supported by that parent execution, not independently rerun here. Independent receipts: <user-home>/projects/_cua_research/realms-pass3-independent-tests.txt and .json. No product sources, parent DEV app or unrelated realms were modified; browser/desktop evidence was not re-attested."
+    }
+  ],
+  "summary": "Pass: independent source review and focused real execution verify both second-cycle fixes under the accepted surfaced-error plus durable retryable-cleanup contract. No remaining blocking security or logic defect was identified in the reviewed scope. Verdict saved to <user-home>/projects/_cua_research/realms-final-review-pass3.json."
+}

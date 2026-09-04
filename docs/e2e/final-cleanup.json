@@ -1,0 +1,18 @@
+[
+  {
+    "home": "hermes-home",
+    "realm": "r-d8d0fce9a7fd4f02867f67af",
+    "owned_count": 9,
+    "remaining": [],
+    "runtime_exists": false,
+    "state": "inactive"
+  },
+  {
+    "home": "manager-home",
+    "realm": "r-97ea09bd6b8440a2b4082f4c",
+    "owned_count": 20,
+    "remaining": [],
+    "runtime_exists": false,
+    "state": "inactive"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "process": {
+    "session_id": "proc_4afc4475772a",
+    "command": "printf SHOULD_NOT_RUN > /run/user/1000/hr-d8d0fce9a7fd4f02/home/must-not-execute",
+    "status": "exited",
+    "pid": 926393,
+    "uptime_seconds": 8,
+    "output_preview": "bash: WAYLAND_DISPLAY: readonly variable\nlogout\n",
+    "exit_code": 126,
+    "completion_reason": "exited",
+    "termination_source": ""
+  },
+  "forbidden_marker_exists": false,
+  "real_backend": "hermes-realms-host-sdk",
+  "lazy_first_tool_created_realm": true
+}

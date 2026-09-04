@@ -1,0 +1,10 @@
+test_private_runtime_visible_but_host_socket_and_devices_hidden (test_driver_containment.DriverContainmentTests.test_private_runtime_visible_but_host_socket_and_devices_hidden) ... ok
+test_real_driver_captures_inside_namespaces (test_driver_containment.DriverContainmentTests.test_real_driver_captures_inside_namespaces) ... ok
+test_verified_release_installs_and_executes_idempotently (test_driver_install.DriverInstallTests.test_verified_release_installs_and_executes_idempotently) ... ok
+test_noexec_target_does_not_report_success (test_driver_repair.DriverRepairTests.test_noexec_target_does_not_report_success) ... ok
+test_reinstall_verified_nonexecutable_driver_is_executable_and_owned (test_driver_repair.DriverRepairTests.test_reinstall_verified_nonexecutable_driver_is_executable_and_owned) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 5.494s
+
+OK

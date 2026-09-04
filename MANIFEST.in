@@ -1,0 +1,9 @@
+include README.md AGENTS.md plugin.py plugin.yaml __init__.py cli.py uv.lock
+recursive-include dashboard *.py *.json
+recursive-include desktop *.js *.md
+recursive-include omarchy *.lua *.md
+recursive-include integration *.patch *.md
+recursive-include skills *.md
+recursive-include docs *.md *.json *.txt *.png
+recursive-include scripts *.py
+recursive-include tests *.py *.mjs *.cjs *.lua

@@ -1,0 +1,688 @@
+{
+  "realm_id": "r-97195bf9268a4923a8e1bb97",
+  "overlay_requested": false,
+  "theme_requested": "cua.default",
+  "version": "cua-driver 0.23.2",
+  "cua_capture_size": [
+    800,
+    600
+  ],
+  "actions": [
+    {
+      "params": {
+        "x": 280,
+        "y": 200,
+        "scope": "window",
+        "session": "theme-probe"
+      },
+      "response": {
+        "delivery": {
+          "mode": "not_applicable"
+        },
+        "effect": "unverifiable",
+        "route": "synthetic_events"
+      },
+      "samples": [
+        {
+          "seconds": 0.025,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.15,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.285,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.417,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.554,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.681,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.805,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.94,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.066,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.191,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.317,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.44,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.564,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.687,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.811,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.936,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.06,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.184,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.317,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.443,
+          "pixels": 0,
+          "bbox": null
+        }
+      ]
+    },
+    {
+      "params": {
+        "x": 560,
+        "y": 380,
+        "scope": "window",
+        "session": "theme-probe"
+      },
+      "response": {
+        "delivery": {
+          "mode": "not_applicable"
+        },
+        "effect": "unverifiable",
+        "route": "synthetic_events"
+      },
+      "samples": [
+        {
+          "seconds": 0.031,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.158,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.395,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.546,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.675,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.811,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 0.935,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.059,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.186,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.384,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.567,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.691,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.816,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 1.94,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.064,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.187,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.31,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.434,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.557,
+          "pixels": 0,
+          "bbox": null
+        },
+        {
+          "seconds": 2.682,
+          "pixels": 0,
+          "bbox": null
+        }
+      ]
+    },
+    {
+      "params": {
+        "x": 180,
+        "y": 320,
+        "session": "theme-probe",
+        "target": {
+          "kind": "desktop",
+          "display_id": "primary"
+        }
+      },
+      "response": {
+        "delivery": {
+          "mode": "not_applicable"
+        },
+        "effect": "unverifiable",
+        "route": "global_input"
+      },
+      "samples": [
+        {
+          "seconds": 0.023,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.148,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.271,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.4,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.523,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.647,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.779,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 0.909,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.041,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.169,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.298,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.43,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.561,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.689,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.818,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 1.944,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 2.068,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 2.21,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 2.343,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        },
+        {
+          "seconds": 2.469,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            193,
+            342
+          ]
+        }
+      ]
+    },
+    {
+      "params": {
+        "x": 560,
+        "y": 180,
+        "session": "theme-probe",
+        "target": {
+          "kind": "desktop",
+          "display_id": "primary"
+        }
+      },
+      "response": {
+        "delivery": {
+          "mode": "not_applicable"
+        },
+        "effect": "unverifiable",
+        "route": "global_input"
+      },
+      "samples": [
+        {
+          "seconds": 0.028,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 0.157,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 0.282,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 0.491,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 0.771,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 0.902,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.031,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.159,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.287,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.416,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.551,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.678,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.808,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 1.934,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.087,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.247,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.386,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.517,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.678,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        },
+        {
+          "seconds": 2.806,
+          "pixels": 206,
+          "bbox": [
+            79,
+            79,
+            573,
+            202
+          ]
+        }
+      ]
+    }
+  ],
+  "driver_threads": [],
+  "cleanup": "registry/runtime/cgroup/processes removed"
+}

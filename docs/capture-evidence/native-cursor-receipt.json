@@ -1,0 +1,27 @@
+{
+  "realm_id": "r-e7470e67e25c46318b52939c",
+  "transport": "private UNIX RFB raw-only",
+  "client_cursor_encoding": false,
+  "positions": [
+    [
+      160,
+      180
+    ],
+    [
+      540,
+      360
+    ]
+  ],
+  "changed_pixels": [
+    103,
+    103
+  ],
+  "outside_changed_pixels": 0,
+  "difference_bbox": [
+    159,
+    179,
+    552,
+    381
+  ],
+  "cleanup": "registry/runtime/cgroup/processes removed"
+}

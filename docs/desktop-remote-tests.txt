@@ -1,0 +1,22 @@
+Command: node --experimental-vm-modules --test tests/desktop/plugin.test.mjs
+Working directory: <user-home>/projects/hermes-realms
+Exit code: 0
+
+(node:367013) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ registered row and both badges render only their owning realm and show effective mode (101.71789ms)
+✔ viewer actions require current ownership and fresh tickets, and use scoped native surfaces (3.106514ms)
+✔ row buttons invoke viewers and expose safe failures; failed refresh removes stale live actions (83.910757ms)
+✔ badges do not advertise stale live state and malformed owners cannot partially fall back (26.760899ms)
+✔ native five-second polling reaches a real HTTP failure with no socket subscription (6226.497302ms)
+✔ remote Watch and Pop out fail before requesting any ticket or opening a surface (2.169312ms)
+✔ remote status keeps counts but disables viewers with actionable tunnel guidance (10.296476ms)
+✔ session queries carry explicit owner scope, never focused identity, and poll natively (1.458198ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6905.728065

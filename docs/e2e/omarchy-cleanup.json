@@ -1,0 +1,41 @@
+{
+  "remaining_records": [],
+  "owned_process_count": 41,
+  "surviving_processes": [],
+  "wayvnc_sockets_removed": true,
+  "realm_runtimes_removed": true,
+  "nested_runtimes_removed": true,
+  "viewer_http_closed": true,
+  "scopes": {
+    "hermes-realm-a1bb372c59dd44c6af1d42bb51593c85.scope": {
+      "Description": "hermes-realm-a1bb372c59dd44c6af1d42bb51593c85.scope",
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "InvocationID": "",
+      "ControlGroup": ""
+    },
+    "hermes-realm-c1f52e2c2f634a10aac3d677d027ca3d.scope": {
+      "Description": "hermes-realm-c1f52e2c2f634a10aac3d677d027ca3d.scope",
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "InvocationID": "",
+      "ControlGroup": ""
+    },
+    "hermes-realm-e1e6702080ea49ccbf8b97d49161daff.scope": {
+      "Description": "hermes-realm-e1e6702080ea49ccbf8b97d49161daff.scope",
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "InvocationID": "",
+      "ControlGroup": ""
+    }
+  },
+  "host_after_cleanup": {
+    "address": "0x562e673424f0",
+    "pid": 23857,
+    "class": "Hermes",
+    "workspace": {
+      "id": 8,
+      "name": "8"
+    }
+  }
+}

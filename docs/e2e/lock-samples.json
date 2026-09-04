@@ -1,0 +1,74 @@
+[
+  {
+    "elapsed": 2.708691761999944,
+    "locked": true,
+    "states": {
+      "a": {
+        "realm": "LockA",
+        "clicks": 1,
+        "text": "-locked0",
+        "tick": 136,
+        "time": 1788560208.3355029
+      },
+      "b": {
+        "realm": "LockB",
+        "clicks": 0,
+        "text": "",
+        "tick": 128,
+        "time": 1788560208.541291
+      }
+    },
+    "hashes": {
+      "a": "ee13680d9481f0debe1d498edeb462ef460df7829b6ef17877c6b55b6cb136d7",
+      "b": "17e1b9746e424bbd5a80b62c0cc35b481c212b56523a56dacbc590309a9b93d2"
+    }
+  },
+  {
+    "elapsed": 35.357541748000585,
+    "locked": true,
+    "states": {
+      "a": {
+        "realm": "LockA",
+        "clicks": 2,
+        "text": "-locked0-locked32",
+        "tick": 202,
+        "time": 1788560241.3959534
+      },
+      "b": {
+        "realm": "LockB",
+        "clicks": 0,
+        "text": "",
+        "tick": 193,
+        "time": 1788560241.1233869
+      }
+    },
+    "hashes": {
+      "a": "b27a78ceb1558a5ce28342ada7de60d7734881d2c536c864d90824081ff463aa",
+      "b": "d418390bcd8f70f75d4a4139e338f39c3c15b99a7231a758d3e817b3f2546d9a"
+    }
+  },
+  {
+    "elapsed": 67.11887310900056,
+    "locked": true,
+    "states": {
+      "a": {
+        "realm": "LockA",
+        "clicks": 3,
+        "text": "-locked0-locked32-locked65",
+        "tick": 265,
+        "time": 1788560272.9386022
+      },
+      "b": {
+        "realm": "LockB",
+        "clicks": 0,
+        "text": "",
+        "tick": 257,
+        "time": 1788560273.178693
+      }
+    },
+    "hashes": {
+      "a": "f48ec7f903a479bdada4655d86623def8cdd78f00f2b6c9a88b28ac6347937d1",
+      "b": "6b6e6dc06a53563ea5675e8c37c97b227e298486f477c80d73ca6b32dfee5a4c"
+    }
+  }
+]

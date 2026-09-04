@@ -1,0 +1,183 @@
+Command: scripts/run_tests.sh <user-home>/projects/hermes-realms/tests/test_integration_cua.py --file-retries 0 -W error
+Working directory: <user-home>/projects/hermes-realms-host-sdk
+Exit code: 1
+
+▶ running per-file parallel test suite via run_tests_parallel.py
+  (TZ=UTC LANG=C.UTF-8 PYTHONHASHSEED=0; clean env)
+▶ pre-compiling bytecode cache
+▶ launching test runner
+Discovered 1 test files (~1 tests) under ['<user-home>/projects/hermes-realms/tests/test_integration_cua.py']; running with -j 24
+[100.0% |     1/~1 | ✓0 | ✗1] ✗ <user-home>/projects/hermes-realms/tests/test_integration_cua.py (1✗, 3.9s)
+
+  ╔╍ Failed: <user-home>/projects/hermes-realms/tests/test_integration_cua.py ╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍
+  ║                     break
+  ║     
+  ║                 if isinstance(meta, BaseException):
+  ║                     hook_error = RuntimeError("Failed to process unraisable exception")
+  ║                     hook_error.__cause__ = meta
+  ║                     errors.append(hook_error)
+  ║                     continue
+  ║     
+  ║                 msg = meta.msg
+  ║                 try:
+  ║ >                   warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+  ║ E                   pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name=13 mode='rb' closefd=True>
+  ║ E                   Enable tracemalloc to get traceback where the object was allocated.
+  ║ E                   See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+  ║ 
+  ║ .venv/lib/python3.11/site-packages/_pytest/unraisableexception.py:67: PytestUnraisableExceptionWarning
+  ║ ------------------------------ Captured log call -------------------------------
+  ║ ERROR    tools.computer_use.cua_backend:cua_backend.py:406 cua-driver click call failed
+  ║ Traceback (most recent call last):
+  ║   File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/cua_backend.py", line 404, in _action
+  ║     out = self._session.call_tool(name, args)
+  ║           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ║   File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/cua_backend_session.py", line 501, in call_tool
+  ║     check_desktop_call(getattr(self, "execution_context", None), name, args)
+  ║   File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/session_context.py", line 28, in check_desktop_call
+  ║     raise SessionExecutionError("computer-use input paused by session owner")
+  ║ hermes_cli.session_execution.SessionExecutionError: computer-use input paused by session owner
+  ║ =========================== short test summary info ============================
+  ║ FAILED ../hermes-realms/tests/test_integration_cua.py::test_real_cua_capture_uses_private_runtime_and_preserves_standard_approval
+  ║ ============================== 1 failed in 3.39s ===============================
+  ║
+  ║  Repro: python -m pytest <user-home>/projects/hermes-realms/tests/test_integration_cua.py -W error
+  ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍
+
+
+=== Summary: 1 files, 0 tests passed, 1 failed (100% complete) in 3.9s (24 workers) ===
+  Durations cached to test_durations.json (1 files)
+
+=== Per-file subprocess time distribution ===
+  Files:   1
+  Total subprocess CPU-wall: 3.9s  (runner wall: 3.9s, parallelism: 24x)
+  P50: 3.88s  P90: 3.88s  P95: 3.88s  P99: 3.88s  Max: 3.88s
+  <1s: 0 files (0%)  <2s: 0 files (0%)
+  Top 10 slowest:
+      3.88s  <user-home>/projects/hermes-realms/tests/test_integration_cua.py
+
+=== Failure output ===
+
+--- <user-home>/projects/hermes-realms/tests/test_integration_cua.py ---
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: <user-home>/projects/hermes-realms
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../hermes-realms/tests/test_integration_cua.py F                         [100%]
+
+=================================== FAILURES ===================================
+__ test_real_cua_capture_uses_private_runtime_and_preserves_standard_approval __
+
+exc_type = None, exc = None, tb = None
+
+    def _exit_wrapper(exc_type, exc, tb):
+>       callback(*args, **kwds)
+E       ResourceWarning: unclosed file <_io.TextIOWrapper name=13 encoding='utf-8'>
+
+../../.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/contextlib.py:469: ResourceWarning
+
+The above exception was the direct cause of the following exception:
+
+cls = <class '_pytest.runner.CallInfo'>
+func = <function call_and_report.<locals>.<lambda> at 0x7f69cc8e98a0>
+when = 'call'
+reraise = (<class '_pytest.outcomes.Exit'>, <class 'KeyboardInterrupt'>)
+
+    @classmethod
+    def from_call(
+        cls,
+        func: Callable[[], TResult],
+        when: Literal["collect", "setup", "call", "teardown"],
+        reraise: type[BaseException] | tuple[type[BaseException], ...] | None = None,
+    ) -> CallInfo[TResult]:
+        """Call func, wrapping the result in a CallInfo.
+    
+        :param func:
+            The function to call. Called without arguments.
+        :type func: Callable[[], _pytest.runner.TResult]
+        :param when:
+            The phase in which the function is called.
+        :param reraise:
+            Exception or exceptions that shall propagate if raised by the
+            function, instead of being wrapped in the CallInfo.
+        """
+        excinfo = None
+        instant = timing.Instant()
+        try:
+>           result: TResult | None = func()
+                                     ^^^^^^
+
+.venv/lib/python3.11/site-packages/_pytest/runner.py:361: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/_pytest/runner.py:250: in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/_pytest/logging.py:865: in pytest_runtest_call
+    yield
+.venv/lib/python3.11/site-packages/_pytest/capture.py:900: in pytest_runtest_call
+    return (yield)
+            ^^^^^
+.venv/lib/python3.11/site-packages/_pytest/skipping.py:268: in pytest_runtest_call
+    return (yield)
+            ^^^^^
+.venv/lib/python3.11/site-packages/_pytest/unraisableexception.py:183: in pytest_runtest_call
+    collect_unraisable(item.config)
+.venv/lib/python3.11/site-packages/_pytest/unraisableexception.py:79: in collect_unraisable
+    raise errors[0]
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+config = <_pytest.config.Config object at 0x7f69cce3fa10>
+
+    def collect_unraisable(config: Config) -> None:
+        pop_unraisable = config.stash[unraisable_exceptions].pop
+        errors: list[pytest.PytestUnraisableExceptionWarning | RuntimeError] = []
+        meta = None
+        hook_error = None
+        try:
+            while True:
+                try:
+                    meta = pop_unraisable()
+                except IndexError:
+                    break
+    
+                if isinstance(meta, BaseException):
+                    hook_error = RuntimeError("Failed to process unraisable exception")
+                    hook_error.__cause__ = meta
+                    errors.append(hook_error)
+                    continue
+    
+                msg = meta.msg
+                try:
+>                   warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+E                   pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name=13 mode='rb' closefd=True>
+E                   Enable tracemalloc to get traceback where the object was allocated.
+E                   See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+.venv/lib/python3.11/site-packages/_pytest/unraisableexception.py:67: PytestUnraisableExceptionWarning
+------------------------------ Captured log call -------------------------------
+ERROR    tools.computer_use.cua_backend:cua_backend.py:406 cua-driver click call failed
+Traceback (most recent call last):
+  File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/cua_backend.py", line 404, in _action
+    out = self._session.call_tool(name, args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/cua_backend_session.py", line 501, in call_tool
+    check_desktop_call(getattr(self, "execution_context", None), name, args)
+  File "<user-home>/projects/hermes-realms-host-sdk/tools/computer_use/session_context.py", line 28, in check_desktop_call
+    raise SessionExecutionError("computer-use input paused by session owner")
+hermes_cli.session_execution.SessionExecutionError: computer-use input paused by session owner
+=========================== short test summary info ============================
+FAILED ../hermes-realms/tests/test_integration_cua.py::test_real_cua_capture_uses_private_runtime_and_preserves_standard_approval
+============================== 1 failed in 3.39s ===============================
+
+=== 1 file with test failures (1 test failed) ===
+  <user-home>/projects/hermes-realms/tests/test_integration_cua.py  (1 test failed)
