@@ -1,6 +1,2 @@
-# Keep verified upstream noVNC and raw test-output whitespace.
+# Keep verified upstream noVNC whitespace.
 realms/web/vendor/novnc/** -whitespace
-docs/**/*.txt -whitespace
-docs/*.txt -whitespace
-# Preserve literal context lines in the companion Git patch.
-integration/*.patch -whitespace

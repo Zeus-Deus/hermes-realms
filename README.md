@@ -2,7 +2,7 @@
 
 Private, per-session Linux desktops for Hermes: labwc + Xwayland + private D-Bus, a contained Cua driver, and an authenticated noVNC viewer.
 
-**Compatibility:** Linux with a working systemd user session and wlroots. The integrated Hermes UI/tool routing requires the companion generic session-extension changes in the `feat/session-desktop-context` Hermes worktree. This is **not** a drop-in plugin for unmodified upstream Hermes. The standalone CLI works independently. The tested companion source patch and exact base/commit are included in [`integration/`](integration/README.md).
+**Compatibility:** Linux with a working systemd user session and wlroots. The pinned driver installer supports **Linux x86_64 only**. Integrated Hermes UI/tool routing requires the generic session-extension work in [upstream PR #103690](https://github.com/NousResearch/hermes-agent/pull/103690), **open, not merged** as of 2026-09-06. This is **not** a drop-in plugin for unmodified upstream Hermes. The standalone CLI works independently. See [`integration/`](integration/README.md) for exact public revisions and compatibility limits.
 
 ## What it does
 
@@ -15,7 +15,7 @@ Private, per-session Linux desktops for Hermes: labwc + Xwayland + private D-Bus
 
 ## Install from this checkout
 
-First build/use the companion Hermes checkout. Keep its production profile separate when evaluating these changes.
+The standalone CLI does not require a Hermes checkout. For integrated tools/UI, prepare a compatible development Hermes checkout as described in [integration/README.md](integration/README.md). Use an explicit disposable profile, not a production profile.
 
 System prerequisites on Arch/Omarchy:
 
@@ -31,10 +31,12 @@ Create a standalone CLI environment and install the pinned driver:
 uv venv .venv
 uv pip install --python .venv/bin/python -e .
 .venv/bin/python -m realms.install_driver
-.venv/bin/hermes-realm doctor
+.venv/bin/hermes-realm --home /absolute/path/to/test-hermes-home doctor
 ```
 
 The driver installer verifies both the release archive and executable SHA-256. It installs cua-driver **0.23.2** in this checkout's `vendor/`; it does not replace the global driver. Bundled noVNC is **1.7.0**; licenses and integrity details are in [`THIRD_PARTY.md`](realms/web/THIRD_PARTY.md).
+
+The wheel supplies the standalone CLI/library and viewer assets only. Native plugin registration needs the full checkout or source distribution (`plugin.yaml`, desktop, dashboard and skill files); installing the wheel does not enable the Hermes plugin. A bundled host/plugin installer is not implemented.
 
 For local plugin development, link this checkout into an **explicit** target Hermes profile:
 
@@ -97,16 +99,16 @@ Supported defaults are `realm`, `host`, and `ask`. Idle TTL is positive seconds.
 - Remote-session Watch/Pop out is disabled before issuing a capability: a local-only listener cannot be assumed reachable through a remote connection.
 - Stock labwc/Cua window metadata can have missing PID/bounds. Realm automation uses an explicit desktop target rather than pretending unreliable app metadata is trustworthy. Window counts use the actual private foreign-toplevel protocol, not process counts.
 - Cursor overlay support is compositor/driver-dependent; capture and cursor verification receipts distinguish the supported native-cursor fallback from themed overlays.
-- Display locking and machine suspension are different. The manager uses a suspend inhibitor while active; see the recorded lock test rather than assuming a compositor screenshot proves lock behavior.
+- Display locking and machine suspension are different. The manager uses a suspend inhibitor while active. Historical lock tests do not establish behavior on the current host/build; the latest core-workflow E2E did not lock the physical host.
 
 ## Verification
 
-[`docs/verification.md`](docs/verification.md) records actual commands/results and distinguishes unit tests, real-process tests, browser tests, and live-model development-app tests. It records the final passing gates, live acceptance evidence, skipped/overlapping lanes and explicit platform/security limitations.
+[`docs/verification.md`](docs/verification.md) distinguishes historical results, the latest privately audited core-workflow E2E, and publication-cleanup checks. Raw screenshots, transcripts, logs and companion patches are intentionally not distributed. A cleaned working tree alone does not remove private data from Git history.
 
 For the integration suite, use the companion Hermes checkout's canonical runner (it provides the expected test environment):
 
 ```sh
-cd /absolute/path/to/hermes-realms-host-sdk
+cd /absolute/path/to/compatible-hermes-checkout
 scripts/run_tests.sh /absolute/path/to/hermes-realms/tests --file-retries 0
 ```
 
@@ -119,7 +121,11 @@ REALMS_PLAYWRIGHT_MODULE=/absolute/path/to/node_modules/playwright \
 
 The script launches real labwc, GTK, WayVNC, and Chromium, asserts view-only/takeover/return behavior, and stops its owned realm. Hardware/systemd tests require the appropriate Linux session; their skips must not be reported as passed acceptance tests.
 
-## Layout
+## License
+
+Original project code is available under the [MIT License](LICENSE). Vendored components retain their own licenses and attribution; see [third-party notices](realms/web/THIRD_PARTY.md). The MIT license does not replace those component licenses.
+
+## Source layout
 
 - `realms/`: manager, lifecycle, containment, session integration, window reader, viewer authority and RFB bridge.
 - `plugin.py`, `plugin.yaml`, `dashboard/`: native Hermes registration and authenticated, owner-scoped API.

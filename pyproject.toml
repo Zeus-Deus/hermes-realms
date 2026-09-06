@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68,<84"]
+requires = ["setuptools>=77.0.3,<84"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "hermes-realms"
 version = "0.1.0"
 description = "Per-session headless desktops for Hermes"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6,<7", "fastapi>=0.115,<0.135", "uvicorn>=0.35.0,<0.43", "websockets>=14,<16"]
 

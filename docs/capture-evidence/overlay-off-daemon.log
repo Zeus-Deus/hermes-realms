@@ -1,2 +1,0 @@
-Cua Driver sends content-free product telemetry by default. Run `cua-driver telemetry disable` to stop it; `cua-driver telemetry status` shows the current setting.
-Cua Driver daemon listening on /run/user/1000/hr-97195bf9268a4923/overlay-probe.sock

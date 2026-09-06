@@ -1,6 +1,6 @@
 # Realms desktop half
 
-`plugin.js` is an uncompiled ESM plugin, loaded from the unified `hermes-realms` package. Requires the generic session contribution / scoped REST / native viewer SDK described in `../../_cua_research/realms-desktop-api.md`. Enable the desktop half in the DEV app's Settings → Plugins; unified desktop halves are opt-in independently of backend enablement.
+`plugin.js` is an uncompiled ESM plugin, loaded from the unified `hermes-realms` package. Requires the generic session contribution / scoped REST / native viewer SDK described in [the public integration dependency](../integration/README.md). Enable the desktop half in the DEV app's Settings → Plugins; unified desktop halves are opt-in independently of backend enablement.
 
 - Status stack: effective Realm/Host/Ask mode, live window count, takeover indicator, Watch and Pop out. Counts come directly from the private labwc `zwlr_foreign_toplevel_manager_v1` protocol, not processes or app PIDs. The read-only snapshot uses a one-second TTL, a bounded 128-entry per-service cache and a one-second protocol timeout. Unavailable/failed enumeration displays `windows unknown`, not zero. Polling does not renew the realm's idle lease. Empty realms indicate lazy startup, not failure.
 - Tile and sidebar badges use the same owner-scoped query cache. No focused-session atoms are read.
@@ -13,11 +13,19 @@
 
 ## Backend contract
 
-See `../../_cua_research/realms-plugin-ui-api.md` for exact schemas. Relative routes are `GET /realms?runtime_session_id=…&stored_session_id=…` and `POST /realms/{id}/watch`; native SDK supplies `/api/plugins/hermes-realms`. Remote viewer URLs must be client-reachable. A backend loopback URL is not a remote tunnel.
+See [`dashboard/plugin_api.py`](../dashboard/plugin_api.py) for implemented schemas and [integration](../integration/README.md) for the host contract. Relative routes are `GET /realms?runtime_session_id=…&stored_session_id=…` and `POST /realms/{id}/watch`; native SDK supplies `/api/plugins/hermes-realms`. Remote viewer URLs must be client-reachable. A backend loopback URL is not a remote tunnel.
 
 ## Scoped tests
 
-From repository root (using installed dependencies in the sibling host SDK checkout, read-only):
+From repository root, first install test dependencies in a separate directory (Node.js required):
+
+```sh
+npm install --prefix /absolute/path/to/desktop-test-deps --ignore-scripts \
+  react@19.2.7 react-dom@19.2.7 jsdom@29.1.1 @tanstack/react-query@5.101.2
+export REALMS_TEST_DESKTOP_PACKAGE=/absolute/path/to/desktop-test-deps/package.json
+```
+
+The harness uses that explicit dependency installation, or normal local Node resolution when the override is absent. It does not assume a named sibling host checkout. Run:
 
 ```sh
 node --experimental-vm-modules --test tests/desktop/plugin.test.mjs

@@ -3,7 +3,9 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
-export const requireHost = createRequire(new URL('../../../hermes-realms-host-sdk/apps/desktop/package.json', import.meta.url));
+// Resolve local test dependencies, or an explicitly selected dependency installation.
+// This test-only override does not select or modify a running Hermes backend.
+export const requireHost = createRequire(process.env.REALMS_TEST_DESKTOP_PACKAGE || import.meta.url);
 export const { JSDOM } = requireHost('jsdom');
 const browser = new JSDOM('', { url: 'http://localhost/' });
 globalThis.window = browser.window;

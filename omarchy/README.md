@@ -6,7 +6,7 @@ This is opt-in source, **not an installer**. No actual `~/.config/hypr` or packa
 
 ## Behavior
 
-- Uses **native, locked initial title** `Hermes Viewer [hermes-realms/realm-<64 lowercase hex>] — …`. The SDK implementation in `hermes-realms-host-sdk/apps/desktop/electron/browser-windows.ts` prefixes/locks this identity before revealing the viewer. Page title is not used as realm identity. Electron has no supported per-window Linux WM_CLASS/app_id override; this integration does not pretend `hermes-realm-viewer` is a class.
+- Uses **native, locked initial title** `Hermes Viewer [hermes-realms/realm-<64 lowercase hex>] — …`. The host SDK implementation in `apps/desktop/electron/browser-windows.ts` (see [integration](../integration/README.md)) prefixes/locks this identity before revealing the viewer. Page title is not used as realm identity. Electron has no supported per-window Linux WM_CLASS/app_id override; this integration does not pretend `hermes-realm-viewer` is a class.
 - Static rule: floating, centered, 80% monitor size, `no_initial_focus`, `focus_on_activate=false`, suppressed activate requests, initial `special:hermes-realms silent` holding workspace. No `pin=true` (that would place it on every workspace).
 - `window.open` allocates a stable, first-free index, then moves the viewer with `follow=false` to `special:hermes-N`. Neither open nor reload dispatches focus or toggles a workspace.
 - With `bindings=true`: **Super+Alt+S** toggles the most recently opened/toggled realm; **Super+Alt+Shift+S** cycles live realms; **Super+Alt+1…9** toggles an index. Only an explicit hotkey reveals a viewer.

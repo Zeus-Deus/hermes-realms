@@ -1,9 +1,16 @@
-include README.md AGENTS.md plugin.py plugin.yaml __init__.py cli.py uv.lock
+include README.md AGENTS.md CLAUDE.md LICENSE plugin.py plugin.yaml __init__.py cli.py uv.lock
 recursive-include dashboard *.py *.json
 recursive-include desktop *.js *.md
 recursive-include omarchy *.lua *.md
-recursive-include integration *.patch *.md
+include integration/README.md
 recursive-include skills *.md
-recursive-include docs *.md *.json *.txt *.png
+include docs/verification.md docs/capture-verification.md docs/phase1-verification.md docs/windows-verification.md
 recursive-include scripts *.py
 recursive-include tests *.py *.mjs *.cjs *.lua
+
+# Raw evidence and companion patches must not re-enter an sdist via stale metadata.
+prune docs/e2e
+prune docs/capture-evidence
+exclude docs/*.txt docs/*.json
+exclude integration/*.patch
+global-exclude *.log *.jsonl *.py[cod] .env .env.*

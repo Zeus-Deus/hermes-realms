@@ -7,3 +7,20 @@ vendor/cua-driver
 *.egg-info/
 dist/
 build/
+
+# Local worktrees and private execution evidence are never release inputs.
+.worktrees/
+.env
+.env.*
+!.env.example
+*.log
+*.jsonl
+*.sqlite
+*.sqlite3
+*.db
+docs/e2e/
+docs/capture-evidence/
+docs/*-tests.txt
+docs/*-receipt.txt
+docs/*-receipts.json
+integration/*.patch
