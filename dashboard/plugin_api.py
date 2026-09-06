@@ -7,14 +7,12 @@ field or a mutable focused-session variable. Do not serve this router alone.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from pathlib import Path
-import sys
+import runpy
 
-# The dashboard importer can run before native plugin discovery.
-_root = str(Path(__file__).resolve().parents[1])
-if _root not in sys.path:
-    sys.path.append(_root)
-
-from realms.integration import OwnerError, get_integration  # noqa: E402 — bootstrap paths/GI version before importing
+_load_runtime = runpy.run_path(str(Path(__file__).resolve().parents[1] / "realms/_binding.py"))["load_runtime"]
+_integration = _load_runtime("integration")
+OwnerError = _integration.OwnerError
+get_integration = _integration.get_integration
 
 router = APIRouter()
 

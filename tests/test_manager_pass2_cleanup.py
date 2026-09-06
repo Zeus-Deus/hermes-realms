@@ -132,6 +132,15 @@ def test_recovery_retains_filesystem_failure_until_retry_succeeds(tmp_path, stat
     manager = Manager(tmp_path)
     record = manager.start("pass2-recovery-cleanup")
     manager.stop(record["id"])
+    # The supervisor can exit before its unit finishes ExecStopPost. Replaying
+    # a crash receipt earlier races that live guardian's legitimate cleanup.
+    deadline = time.monotonic() + 10
+    while scope_info(record["guardian_unit"])["ActiveState"] not in (
+        "inactive", "failed"
+    ) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert scope_info(record["guardian_unit"])["ActiveState"] in ("inactive", "failed")
+    assert scope_info(record["scope"])["ActiveState"] in ("inactive", "failed")
     # Replay this disposable realm's durable receipt after verified unit exit,
     # as left by a manager crash; never synthesize systemctl observations.
     runtime = Path(record["runtime_dir"])

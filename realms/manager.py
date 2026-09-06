@@ -151,6 +151,8 @@ class Manager:
             atomic_json(runtime / "spec.json", asdict(self.config))
             self.registry.put(record)
             env = dict(os.environ)
+            # Fresh -P children resolve the CLI package only from this payload,
+            # never the systemd working directory or caller PYTHONPATH.
             env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
             env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{os.getuid()}/bus"
             env["XDG_RUNTIME_DIR"] = f"/run/user/{os.getuid()}"
@@ -159,6 +161,7 @@ class Manager:
                 cleanup = shlex.join(
                     [
                         sys.executable,
+                        "-P",
                         "-m",
                         "realms.supervisor",
                         "cleanup",
@@ -179,6 +182,7 @@ class Manager:
                     "--setenv=PATH=" + env["PATH"],
                     "--property=ExecStopPost=:" + cleanup,
                     sys.executable,
+                    "-P",
                     "-m",
                     "realms.supervisor",
                     str(self.home),

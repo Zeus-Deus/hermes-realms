@@ -7,6 +7,11 @@ import subprocess
 import sys
 import time
 
+if __package__ in (None, ""):
+    import runpy
+
+    __package__ = runpy.run_path(str(Path(__file__).resolve().with_name("_binding.py")))["load_runtime"]().__name__
+
 from .lifecycle import Registry, alive, atomic_json, stop_scope, remove_runtime
 
 
@@ -45,6 +50,7 @@ def run(home, realm_id):
         "--who=Hermes Realms",
         "--why=Background realm is active",
         sys.executable,
+        "-P",
         "-m",
         "realms.bootstrap",
         "worker",

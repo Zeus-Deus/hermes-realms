@@ -1,5 +1,6 @@
 """Pinned real Cua capture through the plugin, no host input."""
 
+import importlib
 import json
 
 from test_integration import install_plugin
@@ -17,14 +18,19 @@ def test_real_cua_capture_uses_private_runtime_and_preserves_standard_approval(
     from hermes_cli.plugins import (
         discover_plugins,
         get_pre_tool_call_directive,
+        get_plugin_manager,
         unload_plugins,
     )
     from hermes_cli.session_execution import resolve_session_execution_context
-    from realms.integration import get_integration
     from tools.computer_use.tool import handle_computer_use, set_approval_callback
 
     discover_plugins()
-    service = get_integration(tmp_path)
+    # Observe the service registered with the host, not a separate library import.
+    native = get_plugin_manager()._plugins["hermes-realms"].module
+    assert native is not None
+    plugin = importlib.import_module(native.__name__ + ".plugin")
+    service = plugin.get_integration(tmp_path)
+    bridge = importlib.import_module(type(service).__module__.rsplit(".", 1)[0] + ".bridge")
     try:
         action, message = get_pre_tool_call_directive(
             "computer_use", {}, session_id="cua-a", task_id="t-a"
@@ -76,9 +82,9 @@ def test_real_cua_capture_uses_private_runtime_and_preserves_standard_approval(
                 result["ok"] is False
                 and "input paused by session owner" in result["message"]
             )
-        from realms.bridge import get_profile_viewer
-
-        viewer = get_profile_viewer(tmp_path)
+        viewer = bridge.get_profile_viewer(tmp_path)
+        assert viewer.origin == parts.scheme + "://" + parts.netloc
+        assert viewer._thread is not None and viewer._thread.is_alive()
         unload_plugins()
         assert viewer._thread is None
         assert service.manager.list() == []

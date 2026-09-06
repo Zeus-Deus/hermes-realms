@@ -75,12 +75,23 @@ def test_watch_mints_scoped_ticket_and_shared_takeover_pauses_agent(
     from urllib.parse import urlsplit, parse_qs
     from websockets.sync.client import connect
     from fastapi.testclient import TestClient
-    from realms.integration import get_integration
-    from realms.bridge import close_profile_viewer
+    from fastapi.routing import APIRoute
+    import importlib
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     install_plugin(tmp_path)
-    service = get_integration(tmp_path)
+    from hermes_cli import web_server
+    from hermes_cli.web_server_dashboard import _mount_plugin_api_routes
+
+    _mount_plugin_api_routes()
+    # Use the actual mounted endpoint's factory, not the generic library namespace.
+    route = next(
+        route for route in web_server.app.routes
+        if isinstance(route, APIRoute)
+        and route.path == "/api/plugins/hermes-realms/realms/{realm_id}/watch"
+    )
+    service = route.endpoint.__globals__["get_integration"](tmp_path)
+    bridge = importlib.import_module(type(service).__module__.rsplit(".", 1)[0] + ".bridge")
     service.bind(
         session_id="watch-a",
         runtime_session_id="runtime-a",
@@ -91,8 +102,6 @@ def test_watch_mints_scoped_ticket_and_shared_takeover_pauses_agent(
         runtime_session_id="runtime-b",
         stored_session_id="stored-b",
     )
-    from hermes_cli import web_server
-
     # Same router uses request-scoped profile, despite native mount in another test.
     client = TestClient(
         web_server.app, base_url="http://127.0.0.1", client=("127.0.0.1", 5000)
@@ -145,11 +154,16 @@ def test_watch_mints_scoped_ticket_and_shared_takeover_pauses_agent(
             )
             assert child.stdout.strip() == "False"
         assert service.command("watch", session_id="watch-a")["url"].startswith(origin)
+        viewer = bridge.get_profile_viewer(tmp_path)
+        assert viewer.origin == origin
+        assert viewer._thread is not None and viewer._thread.is_alive()
         service.command("stop", session_id="watch-a")
         assert client.post(path, headers=headers, json=owner).status_code == 404
+        service.unload()
+        assert viewer._thread is None
     finally:
         service.unload()
-        close_profile_viewer(tmp_path)
+        bridge.close_profile_viewer(tmp_path)
         for record in service.manager.list():
             service.manager.stop(record["id"])
 

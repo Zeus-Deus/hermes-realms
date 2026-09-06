@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 
 from hermes_constants import get_hermes_home
-from realms.integration import get_integration, requirements_available
+import runpy
+
+_load_runtime = runpy.run_path(str(Path(__file__).resolve().parent / "realms/_binding.py"))["load_runtime"]
+_integration = _load_runtime("integration")
+get_integration = _integration.get_integration
+requirements_available = _integration.requirements_available
 
 
 SCHEMA = {

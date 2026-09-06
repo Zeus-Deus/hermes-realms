@@ -11,8 +11,10 @@ import sys
 import time
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from realms.lifecycle import atomic_json, identity, RealmError, OUTPUT_LIMIT_BYTES
+    import runpy
+
+    __package__ = runpy.run_path(str(Path(__file__).resolve().with_name("_binding.py")))["load_runtime"]().__name__
+from .lifecycle import atomic_json, identity, RealmError, OUTPUT_LIMIT_BYTES
 
 
 # Admission is bounded rather than evicting results a caller may still need.
@@ -340,7 +342,7 @@ def worker(runtime):
                     )
                     result = request["path"]
                 elif request["op"] == "resize":
-                    from realms.config import parse_size
+                    from .config import parse_size
 
                     parse_size(request["size"])
                     subprocess.run(
@@ -358,7 +360,7 @@ def worker(runtime):
                     result = request["size"]
                 elif request["op"] == "launch":
                     import uuid
-                    from realms.lifecycle import validate_environment
+                    from .lifecycle import validate_environment
 
                     if len(received_fds) != 3:
                         raise RealmError(

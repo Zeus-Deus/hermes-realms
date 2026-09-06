@@ -221,13 +221,20 @@ def stop_scope(record):
         and info.get("InvocationID") != record["invocation_id"]
     ):
         raise OwnershipError("scope invocation identity changed")
-    subprocess.run(
-        ["systemctl", "--user", "stop", record["scope"]],
-        env=host_control_env(),
-        capture_output=True,
-        timeout=12,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "stop", record["scope"]],
+            env=host_control_env(),
+            capture_output=True,
+            timeout=12,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # BindsTo/--collect can retire the scope after ownership validation.
+        # A failed stop is safe only after a fresh, successful terminal-state query.
+        if scope_info(record["scope"]).get("ActiveState") not in ("inactive", "failed"):
+            raise
+        return
     if scope_info(record["scope"]).get("ActiveState") not in ("inactive", "failed"):
         raise RealmError("realm scope has not stopped")
 

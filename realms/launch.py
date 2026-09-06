@@ -11,9 +11,11 @@ import sys
 import time
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from realms.manager import Manager
-from realms.lifecycle import RealmError
+    import runpy
+
+    __package__ = runpy.run_path(str(Path(__file__).resolve().with_name("_binding.py")))["load_runtime"]().__name__
+from .manager import Manager
+from .lifecycle import RealmError
 
 
 class PtyRelay:

@@ -2,7 +2,7 @@
 
 This is a reviewed summary, **not raw execution output**. Original receipts, screenshots, session transcripts and source hashes were preserved privately before publication cleanup. They are intentionally absent from source distributions. Do not substitute example output for a real run, or infer that deleting files removes them from Git history.
 
-## Latest core-workflow E2E (2026-09-06)
+## Model-driven core-workflow E2E (2026-09-06)
 
 The privately audited run used product revision `e92c3bf6290fc6a075ca1676cda5fbea3173d220` and a personal-fork Hermes DEV renderer/backend containing both public [host-extension PR commits](../integration/README.md). It was not a clean upstream-PR-only build. The renderer, backend, homes, profiles and user-data were isolated. No product source changes were needed.
 
@@ -93,6 +93,17 @@ A separate DEV renderer and backend were built from clean public host revision `
 - The changed public-host Python lane passed **214 tests, 0 failed, 2 Windows-only skips**. These totals overlap other lanes and must not be added together as unique test counts.
 
 This closes the tested public-PR source-compatibility gap, not the prerequisite upstream merge. It does not establish a credentialed model conversation on that exact host, native Hyprland placement, physical-host lock behavior, remote viewers, AX targeting, or hostile-code sandboxing. The earlier model-driven run and this deterministic integration run remain distinct evidence. No repository visibility change is part of cleanup.
+
+## Fresh native Pop out acceptance (2026-09-06)
+
+A later isolated run used the same public host revision `fa6e9ac63155780dc368bf02f86c34413d441788` and Realms `fbea3060e63621c1c73b7a6d5520dc6ff58e3227`. Actual loaded renderer source maps, backend process identity and runtime hashes were checked. No product or host source change was needed to obtain the missing Pop out evidence.
+
+- Watch and the native Electron Pop out simultaneously rendered a real private GTK app. Trusted viewer events did not change the app in view-only mode. Pop out takeover changed only its own app; actual host Cua input was denied during takeover. A second realm remained usable independently. Returning control restored view-only and successful Cua input.
+- Reopening Pop out after that control cycle retained a live, nonblank restricted viewer. Node, require and the host bridge were unavailable in both guests. Closing one session left the second operational; closing both and the isolated DEV tree left no recorded live survivors or open test listeners.
+- The earlier Disconnected observation did not reproduce. Its original cause remains unknown: this is fresh acceptance evidence, **not a claimed runtime bug fix**.
+- This was deterministic native/tool integration, not a model conversation. An initial auxiliary-vision routing attempt failed without credentials; the disposable profile's supported vision-capability setting then returned direct image envelopes. No credentials were copied or model turn submitted. Initial measurement failures remain in private receipts.
+
+Ozone-headless Electron framebuffer proof does not prove physical compositor placement, native Hyprland mapping, host-lock behavior or non-Linux support. This run used the disk plugin, not the proposed bundled variant. Later source changes require their own acceptance; these results are bound to the revisions above.
 
 ## Security boundaries
 

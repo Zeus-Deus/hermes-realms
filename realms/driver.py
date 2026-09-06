@@ -98,10 +98,11 @@ def create_driver_launcher(manager, realm_id, executable):
     record = next(r for r in manager.list() if r["id"] == realm_id)
     binary = str(Path(executable).resolve(strict=True))
     script = Path(record["runtime_dir"]) / "cua-contained"
-    root = str(Path(__file__).resolve().parents[1])
+    binding = str(Path(__file__).resolve().with_name("_binding.py"))
     content = (
-        f"#!{sys.executable}\nimport sys\nsys.path.insert(0,{root!r})\n"
-        f"from realms.driver import driver_main\ndriver_main({str(manager.home)!r},{realm_id!r},{binary!r})\n"
+        f"#!{sys.executable}\nimport runpy\n"
+        f"driver_main = runpy.run_path({binding!r})['load_runtime']('driver').driver_main\n"
+        f"driver_main({str(manager.home)!r},{realm_id!r},{binary!r})\n"
     )
     import stat
 
