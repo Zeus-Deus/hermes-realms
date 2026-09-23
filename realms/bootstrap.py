@@ -73,8 +73,14 @@ def reap_jobs(jobs, finished):
 
 def private_environment(runtime):
     runtime = Path(runtime)
-    home = runtime / "home"
-    home.mkdir(mode=0o700, exist_ok=True)
+    receipt = runtime / "workspace.json"
+    if receipt.exists():
+        from .workspace import validate
+
+        home = validate(json.loads(receipt.read_text(encoding="utf-8"))) / "home"
+    else:
+        home = runtime / "home"
+        home.mkdir(mode=0o700, exist_ok=True)
     env = {
         k: os.environ[k]
         for k in ("PATH", "LANG", "LC_ALL", "USER", "LOGNAME")
@@ -124,7 +130,7 @@ def wait_until(check, children, timeout=15):
 
 def worker(runtime):
     runtime = Path(runtime)
-    spec = json.loads((runtime / "spec.json").read_text())
+    spec = json.loads((runtime / "spec.json").read_text(encoding="utf-8"))
     env = private_environment(runtime)
     env["WLR_RENDERER"] = spec["renderer"]
     children = {}
@@ -161,14 +167,14 @@ def worker(runtime):
         "<theme><name></name></theme></labwc_config>"
     )
     for name in ("autostart", "environment", "shutdown"):
-        (labwc / name).write_text("")
+        (labwc / name).write_text("", encoding="utf-8")
     publish = shlex.join(
         [sys.executable, str(Path(__file__).resolve()), "publish", str(runtime)]
     )
     spawn("compositor", ["labwc", "-V", "-C", str(labwc), "-s", publish])
     published = runtime / "display.json"
     wait_until(published.exists, children)
-    env.update(json.loads(published.read_text()))
+    env.update(json.loads(published.read_text(encoding="utf-8")))
     if not env.get("DISPLAY") or not (runtime / env["WAYLAND_DISPLAY"]).is_socket():
         raise RealmError("compositor did not publish a private display")
     subprocess.run(
@@ -211,7 +217,7 @@ def worker(runtime):
     os.chmod(vnc_socket, 0o600)
     listener.listen(16)
     vnc_config = runtime / "wayvnc.conf"
-    vnc_config.write_text("")
+    vnc_config.write_text("", encoding="utf-8")
     spawn(
         "vnc",
         [
@@ -234,14 +240,14 @@ def worker(runtime):
     processes = {name: identity(p.pid) for name, p in children.items()}
     processes["worker"] = identity(os.getpid())
     # Persistent Xwayland is compositor-owned; only inspect this scope's PIDs.
-    cgroup = Path("/proc/self/cgroup").read_text().strip().split("::", 1)[1]
+    cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8").strip().split("::", 1)[1]
     for pid in (
         (Path("/sys/fs/cgroup") / cgroup.lstrip("/") / "cgroup.procs")
-        .read_text()
+        .read_text(encoding="utf-8")
         .split()
     ):
         try:
-            if Path(f"/proc/{pid}/comm").read_text().strip() == "Xwayland":
+            if Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip() == "Xwayland":
                 processes["xwayland"] = identity(int(pid))
         except FileNotFoundError:
             pass
@@ -288,7 +294,7 @@ def worker(runtime):
                     "3i",
                     connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12),
                 )
-                if uid != os.getuid():
+                if uid != os.getuid():  # windows-footgun: ok — runtime package rejects non-Linux hosts
                     raise RealmError("foreign RPC peer")
                 import array
 
@@ -366,7 +372,7 @@ def worker(runtime):
                         raise RealmError(
                             "launch requires exactly stdin, stdout and stderr FDs"
                         )
-                    owner = json.loads((runtime / "owner.json").read_text())
+                    owner = json.loads((runtime / "owner.json").read_text(encoding="utf-8"))
                     validate_environment(owner, request["env"])
 
                     def acquire_tty():
@@ -405,13 +411,13 @@ def worker(runtime):
                         if number not in (
                             signal.SIGINT,
                             signal.SIGTERM,
-                            signal.SIGHUP,
+                            signal.SIGHUP,  # windows-footgun: ok — runtime package rejects non-Linux hosts
                             signal.SIGWINCH,
-                            signal.SIGQUIT,
-                            signal.SIGKILL,
+                            signal.SIGQUIT,  # windows-footgun: ok — runtime package rejects non-Linux hosts
+                            signal.SIGKILL,  # windows-footgun: ok — runtime package rejects non-Linux hosts
                         ):
                             raise RealmError("unsupported forwarded signal")
-                        os.killpg(process.pid, number)
+                        os.killpg(process.pid, number)  # windows-footgun: ok — runtime package rejects non-Linux hosts
                     result = True
                 elif request["op"] == "exec":
                     import uuid

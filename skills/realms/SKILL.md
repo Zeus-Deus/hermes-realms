@@ -1,27 +1,101 @@
 ---
 name: realms
-description: Use when choosing or managing a private desktop realm. Keep host access explicit and existing approvals intact.
+description: Test applications in session-owned private desktops.
+platforms: [linux]
 ---
 
-# Conversation desktops
+# Optional test desktops
 
-Use the `realm` tool to manage this conversation, not another session. Read `status` before reporting its mode or readiness.
+Realms are tools, not the agent's execution environment. Ordinary `terminal`, file,
+research and GitHub work stays on the conversation's original configured backend.
+There is nothing to exit after a private test. Normal coding access does not grant
+permission to control the user's physical desktop.
 
-- “Use a separate/private desktop”, “work without disturbing my desktop”, “turn the realm on”: call `realm` with `action: on`. This enables lazy start at the next terminal or computer-use action; it does not prove a desktop has started.
-- “Use my actual desktop”, “work on the host”, “turn the realm off”: only when explicitly requested, call `realm` with `action: off`. Explain that subsequent terminal/computer actions target the host and all ordinary approvals still apply.
-- An unspecified desktop uses the configured default (`realm`, `host`, or `ask`). In `ask` mode ask the user to choose; do not silently choose host.
-- “Make the desktop 1280 by 720”: call `size` with `size: 1280x720`.
-- “Show/watch the desktop”: call `watch`. Tickets expire; obtain a new URL rather than persist or log it. Viewing starts view-only. Human takeover inhibits agent input until returned.
-- “Stop the private desktop”: call `stop`. This kills realm-owned processes and preserves the selected mode. Do not call it after every normal turn; conversation finalization handles cleanup.
+## When to use
 
-Session commands: `/realm on`, `/realm off`, `/realm status`, `/realm size WIDTHxHEIGHT`, `/realm stop`, `/realm watch`, `/realm shot`.
+Use a private target to launch and interact with an application without disturbing
+the user's desktop. Do not allocate one for ordinary coding, research or Git work.
 
-In a realm, use desktop capture (`app: screen`) and the private terminal. Do not attach host applications, host a11y/portal buses, host Cua sockets or input devices. Never fall back to the host after startup, validation or permission errors. Resume only after repairing the realm or explicit user choice to use the host.
+- `realm`: a private labwc/Wayland desktop for ordinary Linux application tests.
+  It shares the host kernel and filesystem; it is not a hostile-code sandbox.
+- `omarchy-vm`: a QEMU guest with its own kernel, disk and Omarchy desktop. Choose
+  this for Hyprland, Omarchy/Quattro plugins, themes and system-level tests.
 
-Only if the realm Cua `app: screen` capture fails, call `realm` with `action: shot` (or `/realm shot`). This captures the already-running **own-session** compositor through validated `Manager.shot`/grim; it never creates a realm or selects a host display. It returns the actual PNG `path`, `realm_id`, `mime_type`, `width`, `height`, `bytes`, `sha256`, `capture: grim`, and `fallback: true`. The PNG is mode 0600 in a unique mode-0700 directory under the active profile's `realms/`; use the returned path, not an invented filename. No caller-supplied realm ID or output path is accepted. If it fails ownership/startup/validation, stop and report the error—never use host screenshot tools, override permissions, or disable realm routing to obtain an image. This is not a permission-denial workaround.
+Honor an explicitly requested kind. Otherwise choose the kind the test needs and
+briefly identify it. Targets belong to this conversation, profile and connection;
+never borrow another session's display, VM or credentials.
 
-Cursor visibility is separate from screenshot success. Pinned Cua 0.23.2 can render the `cua.default` layer-shell overlay in a fresh private daemon; enabling the option alone does not prove the current session has a visible overlay. If that overlay is unavailable, WayVNC's server-rendered native cursor is the supported viewer fallback for **actual private pointer movement**, not logical/synthetic-only cursor moves. Grim captures need not include either cursor. Never claim a themed overlay is active from configuration alone or move the host pointer to demonstrate it.
+## Coding and testing loop
 
-Realm routing is GUI separation, **not a hostile-code sandbox**. Ordinary terminal commands retain local project access. Never claim environment cleanup prevents arbitrary same-user host socket/file access. Do not change permission mode or approval settings to make an action work.
+1. Edit and build the normal project with ordinary tools. Keep that checkout as
+   the source of truth. Use its existing authentication for GitHub operations.
+2. Select the test target with `realm(action="on", kind="realm")` or
+   `realm(action="on", kind="omarchy-vm")`. Inspect `realm(action="status")` to
+   distinguish missing setup, a selected kind and a running target. If setup is
+   required, use the existing native setup/consent flow; do not silently install
+   packages or substitute the physical desktop.
+3. A VM does not contain the host project. Transfer only the selected test copy
+   with `realm(action="push", path=..., destination=...)`. Do not copy host
+   credentials, SSH agents, authentication directories or unrelated private data.
+4. Run commands in the selected target explicitly:
+   `terminal(target="realm", command=..., background=True)` for an application,
+   or a foreground call for a bounded build/diagnostic command. Use tracked
+   background execution, not foreground `nohup` or an untracked shell `&`.
+   Target results report `target_cwd`; do not adopt it as the parent directory.
+5. Use the existing `computer_use` tool for capture, click, typing and drag in
+   either kind. Capture the private desktop with `app="screen"`. Verify effects
+   in the actual application; a successful input response alone is not proof.
+6. Inspect results. Export guest-created changes deliberately with
+   `realm(action="pull", path=..., destination=...)`; compare them before
+   overwriting normal project files. Preserve both copies on a conflict.
+7. Continue normal editing or GitHub work with ordinary tools, without `off`,
+   guest login, credential forwarding or a separate publishing engine.
 
-Mode changes are tool/session state only. Never rewrite the system prompt, replay history or alter the tool schema mid-conversation.
+## Failure and human control
+
+A failed target must not block ordinary work. Use status and explicit target
+terminal commands for diagnosis independently of the GUI driver. Do not repeat
+identical failed calls indefinitely or create a replacement guest to hide failure.
+Preserve the selected workspace and report a concrete blocker when necessary.
+
+If only the GUI driver was lost, use `realm(action="repair")` to retire that
+connection without replacing the target or its applications. Request a fresh
+capture and verify continuity. Never automatically replay uncertain input.
+
+Watch starts view-only. Human takeover pauses agent inspection/input on that target;
+an interrupted connection is not handback. Wait for explicit human recovery/handback,
+while unrelated parent work can continue. Do not use a shell screenshot, alternate
+input utility or `shot` to bypass human control or denied computer-use permission.
+
+When permitted, `realm(action="shot")` is an own-target screenshot fallback. Use
+its returned artifact path and metadata, not an invented guest path. A capture
+failure never permits host-display fallback. Cursor/overlay visibility is separate
+from screenshot success; verify pixels instead of inferring it from configuration.
+
+## Manual controls and safeguards
+
+`on`, `off`, `status`, `watch`, `size`, `stop`, `repair`, `shot`, `push` and `pull` remain
+available through the `realm` tool and `/realm` commands. They manage target use;
+they do not reroute the parent terminal or authorize physical-desktop control.
+Do not stop or switch targets after every turn or as a repair shortcut. Preserve
+unexported work before lifecycle operations; never equate stopping with permission
+to discard data. Closing a viewer is not a request to stop the target.
+
+An explicit Disable (`off`) persists until the user re-enables target use. If `on`
+is refused for this reason, continue ordinary work and ask the user to re-enable
+through `/realm on` or the desktop setup controls. Do not retry another kind or
+use terminal commands, administrative APIs or database edits to undo the override.
+
+Never inject host display variables, host buses, input sockets or device handles
+into a private operation. Do not change approval mode to make an action succeed.
+A VM is not unlimited containment, and a locked display is not a suspended host.
+Report measured readiness/resource information rather than fixed startup promises.
+Keep tool schemas and the conversation's system prompt stable across target changes.
+
+## Verification
+
+Require the intended owner/kind, decoded private captures, application-observed
+input effects, unchanged parent cwd/backend, and preserved project changes.
+Distinguish a running target from working computer-use, and component checks from
+an end-to-end application test. Never claim recovery, retention or cleanup solely
+because a management call returned successfully.

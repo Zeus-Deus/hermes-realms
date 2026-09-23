@@ -40,7 +40,7 @@ def sandbox_command(record, executable, args=()):
         "--dev",
         "/dev",
         "--tmpfs",
-        "/tmp",
+        "/tmp",  # no-tmp: ok — private tmpfs mounted over the sandbox's own /tmp
         "--dir",
         "/run",
         "--dir",
@@ -64,11 +64,11 @@ def sandbox_command(record, executable, args=()):
     import json
     import re
 
-    env = json.loads((runtime / "ready.json").read_text())["env"]
+    env = json.loads((runtime / "ready.json").read_text(encoding="utf-8"))["env"]
     display = env.get("DISPLAY", "")
     if not re.fullmatch(r":[0-9]+", display):
         raise ValueError("Invalid private Xwayland display")
-    xsocket = Path("/tmp/.X11-unix") / ("X" + display[1:])
+    xsocket = Path("/tmp/.X11-unix") / ("X" + display[1:])  # no-tmp: ok — fixed X11 socket directory
     if xsocket.exists():
         command += ["--ro-bind", str(xsocket), str(xsocket)]
     if not binary.is_relative_to("/usr"):
@@ -111,17 +111,17 @@ def create_driver_launcher(manager, realm_id, executable):
             info = script.lstat()
             if (
                 not stat.S_ISREG(info.st_mode)
-                or info.st_uid != os.getuid()
+                or info.st_uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
                 or stat.S_IMODE(info.st_mode) != 0o700
             ):
                 raise ValueError("Private driver launcher ownership changed")
-            if script.read_text() != content:
+            if script.read_text(encoding="utf-8") != content:
                 raise ValueError("Private driver launcher contents changed")
         else:
             descriptor = os.open(
                 script, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o700
             )
-            with os.fdopen(descriptor, "w") as stream:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(content)
     return str(script)
 
@@ -130,7 +130,7 @@ def driver_main(home, realm_id, binary):
     import sys
     from .manager import Manager
 
-    manager = Manager(home)
+    manager = Manager(home, realm_id=realm_id)
     manager.env(realm_id)
     record = next(r for r in manager.list() if r["id"] == realm_id)
     command = sandbox_command(record, binary, sys.argv[1:])

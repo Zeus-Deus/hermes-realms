@@ -1,4 +1,4 @@
-"""Shared takeover leases and revocation epochs; no viewer secrets on disk."""
+"""Durable human holds, live input leases and independent revocation epochs."""
 
 import contextlib
 import os
@@ -19,7 +19,7 @@ class ControlAuthority:
         info = self.directory.lstat()
         if (
             not stat.S_ISDIR(info.st_mode)
-            or info.st_uid != os.getuid()
+            or info.st_uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
             or stat.S_IMODE(info.st_mode) != 0o700
         ):
             raise ValueError("Viewer state must be a private owned directory")
@@ -29,14 +29,19 @@ class ControlAuthority:
         with self._connection() as db:
             db.executescript(
                 "CREATE TABLE IF NOT EXISTS leases(realm TEXT PRIMARY KEY, generation TEXT NOT NULL, lease TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL, expires REAL NOT NULL); CREATE TABLE IF NOT EXISTS epochs(realm TEXT PRIMARY KEY, value INTEGER NOT NULL);"
+                "CREATE TABLE IF NOT EXISTS control_epochs(realm TEXT PRIMARY KEY, value INTEGER NOT NULL);"
             )
+            db.execute("BEGIN IMMEDIATE")
+            if "established" not in {row[1] for row in db.execute("PRAGMA table_info(leases)")}:
+                # Pre-upgrade holds may already contain an interrupted login.
+                db.execute("ALTER TABLE leases ADD COLUMN established INTEGER NOT NULL DEFAULT 1")
 
     @contextlib.contextmanager
     def _connection(self):
         info = self.path.lstat()
         if (
             not stat.S_ISREG(info.st_mode)
-            or info.st_uid != os.getuid()
+            or info.st_uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
             or stat.S_IMODE(info.st_mode) != 0o600
         ):
             raise ValueError("Viewer authority ownership changed")
@@ -47,6 +52,34 @@ class ControlAuthority:
         finally:
             db.close()
 
+    @classmethod
+    def read_agent_epoch(cls, directory, realm):
+        """Observe control without constructing a viewer or upgrading its store.
+
+        Only a never-created viewer directory is an initial cold state. An
+        existing directory with no DB, a legacy schema, or corrupt data refuses.
+        """
+        from .setup_plan import confined
+        directory = Path(directory)
+        path = confined(directory.parent.parent, directory / "authority.sqlite")
+        if not directory.exists():
+            return None
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:  # windows-footgun: ok — runtime package rejects non-Linux hosts
+            raise ValueError("Viewer state must be a private owned directory")
+        from .selection_store import read_snapshot
+        with read_snapshot(path, mode=0o600) as db:
+            db.execute("BEGIN")
+            if "established" not in {row[1] for row in db.execute("PRAGMA table_info(leases)")}:
+                raise ValueError("Viewer authority requires an explicit upgrade")
+            if db.execute("SELECT 1 FROM leases WHERE realm=?", (realm,)).fetchone():
+                raise PermissionError("Human control is held; explicitly hand back or recover the viewer")
+            row = db.execute("SELECT value FROM control_epochs WHERE realm=?", (realm,)).fetchone()
+            epoch = row[0] if row else 0
+            if type(epoch) is not int or epoch < 0:
+                raise ValueError("Invalid viewer control epoch")
+            return epoch
+
     @staticmethod
     def _live(row):
         return (
@@ -55,17 +88,17 @@ class ControlAuthority:
             and alive({"pid": row[0], "start_time": row[1]})
         )
 
-    def acquire(self, realm, generation, lease):
+    def acquire(self, realm, generation, lease, *, pending=False):
         own = identity(os.getpid())
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
-                "SELECT pid,started,expires FROM leases WHERE realm=?", (realm,)
+                "SELECT pid,started,expires,established FROM leases WHERE realm=?", (realm,)
             ).fetchone()
             if self._live(row):
                 return False
             db.execute(
-                "INSERT OR REPLACE INTO leases VALUES(?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO leases VALUES(?,?,?,?,?,?,?)",
                 (
                     realm,
                     generation,
@@ -73,16 +106,71 @@ class ControlAuthority:
                     own["pid"],
                     own["start_time"],
                     time.time() + self.TTL,
+                    int(not pending or bool(row and row[3])),
                 ),
             )
+            self._advance_control_epoch(db, realm)
             return True
 
+    def attach(self, realm, lease):
+        with self._connection() as db:
+            db.execute(
+                "UPDATE leases SET established=1 WHERE realm=? AND lease=?", (realm, lease)
+            )
+
+    def abort(self, realm, lease):
+        """Undo failed initial attach, but never erase an earlier human hold."""
+        with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                "DELETE FROM leases WHERE realm=? AND lease=? AND established=0", (realm, lease)
+            ).rowcount
+            if changed:
+                self._advance_control_epoch(db, realm)
+            else:
+                db.execute(
+                    "UPDATE leases SET expires=0 WHERE realm=? AND lease=?", (realm, lease)
+                )
+
     def controlled(self, realm):
+        return self.status(realm)["controlled"]
+
+    def status(self, realm):
+        """Heartbeat/process loss disconnects input, never hands back to the agent."""
         with self._connection() as db:
             row = db.execute(
                 "SELECT pid,started,expires FROM leases WHERE realm=?", (realm,)
             ).fetchone()
-            return self._live(row)
+            return {"controlled": row is not None, "connected": self._live(row)}
+
+    def disconnect(self, realm, lease):
+        """Retain exclusion while making this exact holder manually recoverable."""
+        with self._connection() as db:
+            db.execute(
+                "UPDATE leases SET expires=0 WHERE realm=? AND lease=?", (realm, lease)
+            )
+
+    @staticmethod
+    def _advance_control_epoch(db, realm):
+        db.execute(
+            "INSERT INTO control_epochs VALUES(?,1) ON CONFLICT(realm) DO UPDATE SET value=value+1",
+            (realm,),
+        )
+
+    def agent_epoch(self, realm):
+        """Atomically admit agent access and snapshot its full-handback fence.
+
+        This is NOT the VNC ticket epoch: normal human acquire/release must not
+        invalidate Watch tickets. Callers recheck this value before disclosure.
+        """
+        with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM leases WHERE realm=?", (realm,)).fetchone():
+                raise PermissionError("Human control is held; explicitly hand back or recover the viewer")
+            row = db.execute(
+                "SELECT value FROM control_epochs WHERE realm=?", (realm,)
+            ).fetchone()
+            return row[0] if row else 0
 
     def refresh(self, realm, lease):
         with self._connection() as db:
@@ -125,7 +213,12 @@ class ControlAuthority:
 
     def release(self, realm, lease):
         with self._connection() as db:
-            db.execute("DELETE FROM leases WHERE realm=? AND lease=?", (realm, lease))
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                "DELETE FROM leases WHERE realm=? AND lease=?", (realm, lease)
+            ).rowcount
+            if changed:
+                self._advance_control_epoch(db, realm)
 
     def epoch(self, realm):
         with self._connection() as db:
@@ -136,7 +229,9 @@ class ControlAuthority:
 
     def revoke(self, realm):
         with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
             db.execute(
                 "INSERT INTO epochs VALUES(?,1) ON CONFLICT(realm) DO UPDATE SET value=value+1",
                 (realm,),
             )
+            self._advance_control_epoch(db, realm)

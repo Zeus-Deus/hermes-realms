@@ -1,7 +1,7 @@
 """Crash-safe registry and Linux process ownership primitives."""
 
 from contextlib import contextmanager
-import fcntl
+import fcntl  # windows-footgun: ok — runtime package rejects non-Linux hosts
 import json
 import os
 from pathlib import Path
@@ -25,11 +25,33 @@ class OwnershipError(RealmError):
     pass
 
 
+class LegacyExportRequired(RealmError):
+    """An unbound legacy HOME cannot safely pass the Stop boundary."""
+
+    def __init__(self, record):
+        self.realm_id = record["id"]
+        self.session_id = record["session_id"]
+        self.workspace = str(Path(record["runtime_dir"]) / "home")
+        super().__init__(
+            f"legacy Realm {self.realm_id}: export required from {self.workspace}; "
+            "Stop was not performed. Preserve and verify the work outside this "
+            "volatile runtime before recovery/disposal. The old lifecycle or "
+            "reboot can still delete unexported work; updating code is not migration."
+        )
+
+
+def require_retained_workspace(record):
+    # A broken modern receipt is an ownership failure, never a legacy downgrade.
+    validate_record(record)
+    if "workspace_dir" not in record:
+        raise LegacyExportRequired(record)
+
+
 def atomic_json(path, value):
     path = Path(path)
     fd, temporary = tempfile.mkstemp(prefix=".write-", dir=path.parent)
     try:
-        with os.fdopen(fd, "w") as stream:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(value, stream)
             stream.flush()
             os.fsync(stream.fileno())
@@ -46,7 +68,7 @@ def atomic_json(path, value):
 
 def identity(pid):
     try:
-        stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
         if stat[0] == "Z":
             return None
         return {"pid": int(pid), "start_time": int(stat[19])}
@@ -62,8 +84,8 @@ def host_control_env():
     return {
         "PATH": "/usr/bin:/bin",
         "HOME": str(Path.home()),
-        "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}",
-        "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{os.getuid()}/bus",
+        "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}",  # windows-footgun: ok — runtime package rejects non-Linux hosts
+        "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{os.getuid()}/bus",  # windows-footgun: ok — runtime package rejects non-Linux hosts
     }
 
 
@@ -97,10 +119,21 @@ def validate_record(record):
     generation = record.get("generation", "")
     if (
         not re.fullmatch(r"[0-9a-f]{32}", generation)
-        or record.get("id") != "r-" + generation[:24]
+        or not re.fullmatch(r"r-[0-9a-f]{24}", record.get("id", ""))
+        or ("workspace_dir" not in record and record.get("id") != "r-" + generation[:24])
     ):
         raise OwnershipError("invalid realm generation")
-    expected_runtime = Path(f"/run/user/{os.getuid()}/hr-{generation[:16]}")
+    if "workspace_dir" in record:
+        from .workspace import validate
+
+        validate(record)
+    else:
+        from .workspace import location
+
+        candidate = location(record)
+        if candidate.exists() or candidate.is_symlink():
+            raise OwnershipError("workspace binding missing from registry")
+    expected_runtime = Path(f"/run/user/{os.getuid()}/hr-{generation[:16]}")  # windows-footgun: ok — runtime package rejects non-Linux hosts
     if (
         record.get("runtime_dir") != str(expected_runtime)
         or record.get("scope") != f"hermes-realm-{generation}.scope"
@@ -117,7 +150,7 @@ def validate_record(record):
         raise OwnershipError("realm runtime is a symlink")
     if expected_runtime.exists():
         info = expected_runtime.stat()
-        if info.st_uid != os.getuid() or info.st_mode & 0o777 != 0o700:
+        if info.st_uid != os.getuid() or info.st_mode & 0o777 != 0o700:  # windows-footgun: ok — runtime package rejects non-Linux hosts
             raise OwnershipError("realm runtime permissions changed")
 
 
@@ -135,7 +168,7 @@ def validate_live(record):
         if not alive(process):
             raise OwnershipError("realm process exited or PID identity changed")
         if (
-            Path(f"/proc/{process['pid']}/cgroup").read_text().strip()
+            Path(f"/proc/{process['pid']}/cgroup").read_text(encoding="utf-8").strip()
             != "0::" + record["cgroup"]
         ):
             raise OwnershipError("realm process left its scope")
@@ -145,7 +178,7 @@ def validate_environment(record, env):
     runtime = Path(record["runtime_dir"])
     required = {
         "XDG_RUNTIME_DIR": str(runtime),
-        "HOME": str(runtime / "home"),
+        "HOME": str(Path(record["workspace_dir"]) / "home") if "workspace_dir" in record else str(runtime / "home"),
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + str(runtime / "bus"),
         "XAUTHORITY": str(runtime / "Xauthority"),
         "XDG_CURRENT_DESKTOP": "labwc",
@@ -186,16 +219,16 @@ def validate_environment(record, env):
         runtime / env["WAYLAND_DISPLAY"],
         runtime / "bus",
         Path(a11y.removeprefix("unix:path=")),
-        Path("/tmp/.X11-unix/X" + env["DISPLAY"][1:]),
+        Path("/tmp/.X11-unix/X" + env["DISPLAY"][1:]),  # no-tmp: ok — fixed X11 socket directory
     ]
     socket_inodes = {}
-    for line in Path("/proc/net/unix").read_text().splitlines()[1:]:
+    for line in Path("/proc/net/unix").read_text(encoding="utf-8").splitlines()[1:]:
         parts = line.split()
         if len(parts) >= 8:
             socket_inodes.setdefault(parts[7], set()).add("socket:[" + parts[6] + "]")
     owned = set()
     cgroup = Path("/sys/fs/cgroup") / record["cgroup"].lstrip("/")
-    for pid in (cgroup / "cgroup.procs").read_text().split():
+    for pid in (cgroup / "cgroup.procs").read_text(encoding="utf-8").split():
         try:
             for fd in Path(f"/proc/{pid}/fd").iterdir():
                 try:
@@ -246,6 +279,17 @@ def remove_runtime(registry, record):
     can be symlinks to paths outside this generation's owned tree.
     """
     validate_record(record)
+    if record.get("status") == "deleting":
+        return
+    runtime = Path(record["runtime_dir"])
+    if "workspace_dir" not in record and (runtime / "home").exists():
+        # This fallback protects only callers running this version. An already-
+        # imported old guardian can still delete both runtime and registry.
+        # /run is also volatile: this is not a qualified legacy migration.
+        registry.put(dict(record, status="stopped",
+                          legacy_workspace_dir=str(runtime / "home"),
+                          cleanup_note="Legacy work remains in volatile runtime; an old guardian may still delete it; recovery required"))
+        return
     record = dict(record, status="stopping")
     registry.put(record)
     try:
@@ -256,7 +300,12 @@ def remove_runtime(registry, record):
         record.update(status="cleanup_failed", cleanup_error=str(exc))
         registry.put(record)
         raise RealmError("realm runtime cleanup failed: " + str(exc)) from exc
-    registry.remove(record["id"])
+    if "workspace_dir" in record:
+        record.update(status="stopped")
+        record.pop("cleanup_error", None)
+        registry.put(record)
+    else:
+        registry.remove(record["id"])
 
 
 class Registry:
@@ -265,7 +314,7 @@ class Registry:
         if self.root.is_symlink():
             raise OwnershipError("registry must not be a symlink")
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if self.root.stat().st_uid != os.getuid():
+        if self.root.stat().st_uid != os.getuid():  # windows-footgun: ok — runtime package rejects non-Linux hosts
             raise OwnershipError("registry has a foreign owner")
         os.chmod(self.root, 0o700)
 
@@ -288,12 +337,12 @@ class Registry:
     def get(self, realm_id):
         path = self.path(realm_id)
         try:
-            value = json.loads(path.read_text())
+            value = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
             raise RealmError("realm not found: " + realm_id) from exc
         if (
             value.get("id") != realm_id
-            or value.get("uid") != os.getuid()
+            or value.get("uid") != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
             or value.get("home") != str(self.root.parent)
         ):
             raise OwnershipError("registry ownership mismatch")

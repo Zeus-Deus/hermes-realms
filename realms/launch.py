@@ -98,13 +98,13 @@ def main(argv=None):
         )
         return 2
     home, realm_id = args[:2]
-    manager = Manager(home)
+    manager = Manager(home, realm_id=realm_id)
     pending_signals = []
     forwarded = (
         signal.SIGINT,
         signal.SIGTERM,
-        signal.SIGHUP,
-        signal.SIGQUIT,
+        signal.SIGHUP,  # windows-footgun: ok — runtime package rejects non-Linux hosts
+        signal.SIGQUIT,  # windows-footgun: ok — runtime package rejects non-Linux hosts
         signal.SIGWINCH,
     )
     previous = {number: signal.getsignal(number) for number in forwarded}

@@ -132,7 +132,7 @@ def count_windows(record, *, timeout=1.0):
     try:
         validate_live(record)
         runtime = Path(record["runtime_dir"])
-        env = json.loads((runtime / "ready.json").read_text())["env"]
+        env = json.loads((runtime / "ready.json").read_text(encoding="utf-8"))["env"]
         validate_environment(record, env)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(timeout)
@@ -140,7 +140,7 @@ def count_windows(record, *, timeout=1.0):
             pid, uid, _ = struct.unpack(
                 "=3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
             )
-            if uid != os.getuid() or identity(pid) != record["processes"]["compositor"]:
+            if uid != os.getuid() or identity(pid) != record["processes"]["compositor"]:  # windows-footgun: ok — runtime package rejects non-Linux hosts
                 raise WindowCountUnavailable("Compositor peer ownership mismatch")
             return _snapshot(connection, timeout)
     except (

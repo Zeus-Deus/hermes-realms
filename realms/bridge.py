@@ -37,6 +37,15 @@ def get_profile_viewer(home):
             def resolve(realm_id):
                 from .lifecycle import RealmError, validate_live
 
+                if realm_id.startswith("v-"):
+                    # A VM realm's viewer endpoint is QEMU's VNC unix socket.
+                    # Same RFB protocol, same ownership rules, different manager.
+                    from .vm_manager import VmManager, VmError
+
+                    try:
+                        return VmManager(key).validate(realm_id)
+                    except (RealmError, VmError, OSError, ValueError):
+                        return None
                 try:
                     with manager.registry.lock():
                         record = manager.registry.get(realm_id)
@@ -59,6 +68,28 @@ def close_profile_viewer(home):
         server = _profile_servers.pop(key, None)
     if server:
         server.stop()
+
+
+def _peer_in_realm_scope(pid, realm):
+    """Whether *pid* runs inside this VM realm's own systemd scope.
+
+    A labwc realm proves socket ownership by matching the listener against the
+    worker/VNC processes it started. A VM realm has neither: QEMU is the
+    listener and systemd owns it. The equivalent proof is cgroup membership —
+    the realm's record pins the scope at launch, so a PID inside it is that
+    realm's QEMU and nothing else. Reading ``/proc`` also closes the PID-reuse
+    window that comparing bare PIDs would leave open.
+    """
+    scope = realm.get("cgroup")
+    if not scope:
+        return False
+    try:
+        with open(f"/proc/{int(pid)}/cgroup", encoding="utf-8") as handle:
+            current = handle.read()
+    except (OSError, ValueError):
+        return False
+    return any(line.split(":", 2)[-1].strip() == scope
+               for line in current.splitlines() if line.strip())
 
 
 class ViewerServer:
@@ -155,6 +186,13 @@ class ViewerServer:
             realm_id, self._ticket_generation(realm), can_control=can_control, ttl=ttl
         )
 
+    def renew(self, realm_id, token, *, ttl=300):
+        with self._lock:
+            realm = self.resolve_realm(realm_id)
+            return realm is not None and self.tickets.renew(
+                token, realm_id, self._ticket_generation(realm), ttl=ttl
+            )
+
     def _ticket_generation(self, realm):
         epoch = self.authority.epoch(realm["id"]) if self.authority else 0
         return f"{realm['generation']}:{epoch}"
@@ -186,14 +224,14 @@ class ViewerServer:
                 if (
                     runtime.is_symlink()
                     or not stat.S_ISDIR(parent.st_mode)
-                    or parent.st_uid != os.getuid()
+                    or parent.st_uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
                     or stat.S_IMODE(parent.st_mode) != 0o700
                 ):
                     return None
                 if (
                     path.parent != runtime
                     or not stat.S_ISSOCK(info.st_mode)
-                    or info.st_uid != os.getuid()
+                    or info.st_uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
                     or stat.S_IMODE(info.st_mode) != 0o600
                 ):
                     return None
@@ -234,7 +272,7 @@ class ViewerServer:
         lease = uuid.uuid4().hex
         with self._lock:
             taken = control and (
-                not self.authority.acquire(realm_id, generation, lease)
+                not self.authority.acquire(realm_id, generation, lease, pending=True)
                 if self.authority
                 else realm_id in self._controls
             )
@@ -245,6 +283,8 @@ class ViewerServer:
             return
         writer = None
         tasks = []
+        attached = False
+        client_close_code = None
         try:
             connection = (
                 asyncio.open_unix_connection(endpoint[1])
@@ -265,21 +305,35 @@ class ViewerServer:
                 # SO_PEERCRED identifies the listener creator. The worker
                 # prebinds the product socket and passes it to WayVNC; a
                 # directly bound WayVNC listener identifies the VNC process.
+                # A VM realm has no such processes: the listener is QEMU, and
+                # its proof of belonging is the realm's own systemd scope.
                 owners = realm.get("processes", {})
+                known = (
+                    _peer_in_realm_scope(pid, realm) if realm.get("kind") == "omarchy-vm"
+                    else process is not None
+                    and process in (owners.get("worker"), owners.get("vnc"))
+                )
                 if (
-                    uid != os.getuid()
+                    uid != os.getuid()  # windows-footgun: ok — runtime package rejects non-Linux hosts
                     or process is None
-                    or process not in (owners.get("worker"), owners.get("vnc"))
+                    or not known
                     or self._endpoint(realm) != endpoint
                 ):
                     raise ValueError("Realm VNC peer ownership changed")
             await ws.accept(subprotocol="binary")
+            # Acceptance is the conservative input-potential boundary; an RFB
+            # handshake failure after this point must retain human exclusion.
+            attached = True
+            if control and self.authority:
+                self.authority.attach(realm_id, lease)
             parser = ClientFilter(control=control)
 
             async def receive():
+                nonlocal client_close_code
                 while True:
                     message = await ws.receive()
                     if message["type"] == "websocket.disconnect":
+                        client_close_code = message.get("code")
                         return
                     data = message.get("bytes")
                     if data is None:
@@ -372,9 +426,15 @@ class ViewerServer:
                 with contextlib.suppress(ConnectionError):
                     await writer.wait_closed()
             if control and self.authority:
-                self.authority.release(realm_id, lease)
+                if not attached:
+                    self.authority.abort(realm_id, lease)
+                elif client_close_code in (1000, 1001):
+                    self.authority.release(realm_id, lease)
+                else:
+                    self.authority.disconnect(realm_id, lease)
             with self._lock:
                 if self._controls.get(realm_id) == lease:
                     self._controls.pop(realm_id, None)
             with contextlib.suppress(RuntimeError, WebSocketDisconnect):
-                await ws.close()
+                code = 1000 if self.tickets.check(token, realm_id, generation, control=control) else 1008
+                await ws.close(code=code)

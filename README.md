@@ -1,135 +1,224 @@
-# Agent Realms
+# Realms — optional private testing tools
 
-Private, per-session Linux desktops for Hermes: labwc + Xwayland + private D-Bus, a contained Cua driver, and an authenticated noVNC viewer.
+Realms gives a conversation its own Linux test desktop without moving the agent's ordinary work into it. Normal terminal commands, files, cwd, research and GitHub operations keep the conversation's original configured backend and approvals. That backend may be remote; it does not automatically become the Desktop client's machine. There is nothing to exit after a private test.
 
-**Compatibility:** Linux with a working systemd user session and wlroots. The pinned driver installer supports **Linux x86_64 only**. Integrated Hermes UI/tool routing requires the generic session-extension work in [upstream PR #103690](https://github.com/NousResearch/hermes-agent/pull/103690), **open, not merged** as of 2026-09-06. This is **not** a drop-in plugin for unmodified upstream Hermes. The standalone CLI works independently. See [`integration/`](integration/README.md) for exact public revisions and compatibility limits.
+Two session-owned targets are available:
 
-## What it does
+- **Regular Realm** (`realm`): a private labwc/Wayland desktop with Xwayland support. It separates windows, pointer, clipboard and focus from the user's desktop, but shares the host kernel, filesystem and networking. **It is not a hostile-code sandbox.**
+- **Omarchy VM** (`omarchy-vm`): an Omarchy QEMU/KVM guest with its own kernel, disk and Hyprland environment, for Omarchy/Quattro plugins, themes and system-level tests.
 
-- Starts a realm lazily for a session's terminal/computer-use tools. GUI processes share the realm's private Wayland/Xwayland displays, not your physical desktop.
-- Keeps sessions separate, including their compositor seats, session/accessibility buses, Xauthority and clipboards.
-- Owns subprocesses in a systemd scope; validates boot ID, PID start time, scope identity and runtime ownership before reusing or stopping them.
-- Shows real foreign-toplevel window counts, a compact session badge, Watch, and Pop out.
-- Opens Watch view-only. Take over acquires an exclusive cross-process lease and pauses agent input. Returning control, disconnecting, expiry or revocation releases it.
-- Defaults to hardware GLES rendering; does not silently choose a slow renderer or fall back to the host desktop.
+Enabling the plugin makes these capabilities available; ordinary coding does not allocate a desktop. An explicit target failure never falls back to the physical desktop. Normal host coding authority is not permission to drive that desktop.
 
-## Install from this checkout
+## Host APIs and provenance
 
-The standalone CLI does not require a Hermes checkout. For integrated tools/UI, prepare a compatible development Hermes checkout as described in [integration/README.md](integration/README.md). Use an explicit disposable profile, not a production profile.
+The plugin requires the generic consented native-plugin setup, session ownership, execution-context and Desktop viewer APIs described in [NousResearch/hermes-agent#103690](https://github.com/NousResearch/hermes-agent/pull/103690). Do not advertise compatibility with hosts lacking those interfaces. Optional terminal and computer-use routing uses generic target resolvers, not a Realms-specific override of the parent's environment.
 
-System prerequisites on Arch/Omarchy:
+The implementation is adopted from [hermes-realms](https://github.com/Zeus-Deus/hermes-realms) at `fbea3060e63621c1c73b7a6d5520dc6ff58e3227`. Runtime, Desktop, dashboard and skill live together here. Desktop builds discover this same `desktop/plugin.js`; there is no second implementation or dependency on a separately installed `realms` Python package. Original MIT attribution and all vendored noVNC/pako notices are preserved.
 
-```sh
-omarchy pkg add labwc wayvnc wlr-randr grim xorg-xwayland bubblewrap
-```
+## Enable once, not once per task
 
-A working user D-Bus, AT-SPI bus launcher, systemd user manager and render node are also required; `hermes-realm doctor` checks runtime prerequisites. GTK4 and Python GObject are needed for the GUI test fixtures, not normal usage.
+The feature is **disabled by default** at discovery:
 
-Create a standalone CLI environment and install the pinned driver:
+- Native discovery inventories `kind: standalone` without importing its Python until `plugins.enabled` includes `hermes-realms`. Explicit `plugins.disabled` wins.
+- Its hooks, model tool, slash command, administrative CLI and skill are absent while disabled. Discovery does not download a driver or start a compositor, scope, viewer listener or Desktop contribution.
+- Backend activation is per profile, without inheriting another profile's configuration. The dashboard API follows that activation gate.
+- The Desktop half is a separate opt-in in Settings → Plugins (`defaultEnabled: false`). Enabling only the UI grants no backend authority.
 
-```sh
-uv venv .venv
-uv pip install --python .venv/bin/python -e .
-.venv/bin/python -m realms.install_driver
-.venv/bin/hermes-realm --home /absolute/path/to/test-hermes-home doctor
-```
+The two controls affect different layers:
 
-The driver installer verifies both the release archive and executable SHA-256. It installs cua-driver **0.23.2** in this checkout's `vendor/`; it does not replace the global driver. Bundled noVNC is **1.7.0**; licenses and integrity details are in [`THIRD_PARTY.md`](realms/web/THIRD_PARTY.md).
+- **Desktop plugins → Realms** enables session viewing/management controls in the app.
+- **Agent plugins → Applies to → hermes-realms** enables capabilities on the selected connected gateway profile.
 
-The wheel supplies the standalone CLI/library and viewer assets only. Native plugin registration needs the full checkout or source distribution (`plugin.yaml`, desktop, dashboard and skill files); installing the wheel does not enable the Hermes plugin. A bundled host/plugin installer is not implemented.
+Agent-plugin enablement reviews the pinned Cua release, checksums and profile-local destination. **Set up and enable** authorizes that setup and its readiness checks. Cancelling before confirmation leaves enablement unchanged. Failed verification or missing prerequisites do not authorize fallback to the host display.
 
-For local plugin development, link this checkout into an **explicit** target Hermes profile:
+After changing Python activation, restart the owning backend and start a new conversation rather than changing an existing conversation's cached tool schemas. Read [Legacy upgrade safety](#legacy-upgrade-safety) before restarting a backend with older active Realms.
 
-```sh
-export HERMES_HOME=/absolute/path/to/test-hermes-home
-mkdir -p "$HERMES_HOME/plugins"
-ln -s /absolute/path/to/hermes-realms "$HERMES_HOME/plugins/hermes-realms"
-hermes config set plugins.realms.default_mode realm
-```
+## Coding and testing
 
-Do not overwrite an existing plugin directory. Ensure the target Hermes Python environment has the dependencies listed in `pyproject.toml`. Restart only that test backend to load Python hooks. In the corresponding development app, use **Settings → Plugins → Agent Realms** to enable the desktop UI. Merely installing the Python plugin does not enable the user-controlled desktop toggle.
+The agent can discover the bundled `hermes-realms:realms` skill and existing Hermes computer-use capability, including through deferred tool discovery. Users do not need to supply slash commands.
 
-For Omarchy's special-workspace mapping, see [`omarchy/README.md`](omarchy/README.md). The Lua module is opt-in; installing the plugin does not silently edit or reload your live Hyprland configuration.
+1. Edit/build the normal project using ordinary tools and its existing host authentication.
+2. Select the requested kind, or choose the kind appropriate to the task. Missing prerequisites lead to the existing native setup/consent flow, not an improvised installer or another desktop.
+3. For a VM, copy only the selected test files. There is no host-home mount or implicit synchronization.
+4. Run a target operation with `terminal(target="realm", ...)`. Use tracked background execution for a GUI application. The result's `target_cwd` belongs to that target, not the parent project.
+5. Use the existing `computer_use` tool for capture, click, typing and drag. `app="screen"` captures the selected private desktop. Verify application effects, not merely a successful input response.
+6. Export guest changes deliberately, inspect them and resolve conflicts in the normal project.
+7. Continue normal editing or GitHub work with ordinary tools. No `/realm off`, guest GitHub login, credential forwarding or custom publisher is required.
 
-## Use
+Targets are owned by conversation, profile and connection, with generation/endpoint validation. Another conversation's resource is not a fallback. Regular Realms can access the existing host project filesystem; VM projects must be transferred explicitly.
 
-The agent skill explains natural-language selection such as “use your realm,” “on my desktop,” and “show me what you're doing.” Explicit session commands include:
+## Setup and recovery
 
-```text
-/realm on
-/realm off
-/realm status
-/realm size 1280x720
-/realm watch
-/realm stop
-```
+The pinned driver installer supports **Linux x86-64 only**. A regular Realm needs labwc, Xwayland, WayVNC, grim, wlr-randr, bubblewrap, D-Bus/AT-SPI, a working systemd user manager and the appropriate renderer prerequisites. The plugin does not alter or reload host Hyprland configuration.
 
-`on` selects realm mode; a lazy session starts its desktop on the first eligible tool, not on the mode command itself. `off` stops the owned realm and returns future tools to the existing host route. The configured `default_mode: ask` requires an explicit choice before GUI-capable tools proceed; there is no `/realm ask` command. `stop` stops the current realm without implicitly opting into host mode. The next allowed realm-mode tool can create a fresh realm.
+An ordinary chat does not show a setup warning just because the plugin is enabled. When private testing is requested, ready prerequisites can be reused; otherwise the conversation offers the selected kind's setup action. The review distinguishes gateway-host packages from profile-local driver/base files. Supported Arch package installation uses native Polkit authorization, never a password in chat. Other hosts or missing KVM/key/privilege requirements may require an explicit blocker or administrator preparation.
 
-Standalone CLI (use `--help` on each subcommand for exact arguments):
+Setup progress comes from the actual job. Reopening the chat observes that job, and stale owner/config/source confirmation is rejected. Cancelling a review starts nothing; cancellation does not mean already installed shared components are uninstalled. A completed download alone does not establish readiness.
+
+When an agent's native Desktop/TUI request encountered missing setup, successful setup can resume that same conversation at an idle boundary. The backend rechecks the owner, selected kind, permissions and cancellation state. It asks the agent to reevaluate the current task, not replay an old command or click. Manual setup without a recorded agent request does not launch an unsolicited turn. Cancelled or uncertain continuation attempts are not automatically replayed. Setup readiness and continuation completion are separate states; a ready target does not prove the test finished.
+
+Advanced/manual CLI preparation remains available:
 
 ```sh
-.venv/bin/hermes-realm start demo
-.venv/bin/hermes-realm list
-.venv/bin/hermes-realm env REALM_ID
-.venv/bin/hermes-realm exec REALM_ID -- your-gui-command
-.venv/bin/hermes-realm shot REALM_ID screenshot.png
-.venv/bin/hermes-realm resize REALM_ID 1280x720
-.venv/bin/hermes-realm stop REALM_ID
+hermes plugins enable hermes-realms
+hermes realms --help
+hermes realms doctor
+hermes realms install-driver
 ```
 
-Settings are profile-scoped and changed through Hermes:
+Use `hermes -p NAME ...` for a named profile. CLI enablement also requires setup consent (default **No**); noninteractive callers must supply the exact profile/key/revision consent shown by that flow. Force/install flags are not substitutes for consent.
+
+`hermes realms install-driver` installs the pinned cua-driver 0.23.2 into the active profile's `plugin-data/hermes-realms/bin/cua-driver`, verifies its checksum and execution, and leaves global binaries and packaged source untouched. `--archive /path/to/approved-release.tar.gz` uses an existing approved archive. `--target` is an administrative export override, not the runtime configuration. A valid installation can be reused without another download. Driver verification alone is not completed profile setup.
+
+A broken GUI driver does not disable ordinary tools or target diagnostics. For a running target, `/realm repair` retires only its CUA connection; the next computer-use reconnects. Verify a fresh capture and application continuity. Repair does not reinstall the OS, allocate a substitute guest or replay uncertain input. Missing privileges, unavailable guests and damaged ownership remain explicit failures.
+
+## Omarchy VM details
+
+The base is installed from **Omarchy's GPG-verified release ISO** using a pinned vendored copy of [`omarchy vm`](https://github.com/omacom/omarchy/pull/10977); see [vendor provenance](realms/vendor/VENDOR.md). Each conversation gets its own working overlay, not a shared profile desktop. Startup, download and memory figures depend on the host and workload; configured RAM is not a measured usage report.
+
+VM setup needs `qemu-full`, `edk2-ovmf`, `mtools`, access to `/dev/kvm` and an existing host `~/.ssh/id_ed25519` key pair. Setup does not rewrite host keys or virtualization permissions. Review the selected host/profile, downloads and storage before confirming.
 
 ```sh
-hermes config set plugins.realms.default_mode realm
-hermes config set plugins.realms.size 1920x1080
-hermes config set plugins.realms.idle_ttl 1800
-hermes config set plugins.realms.renderer gles2
-hermes config set plugins.realms.overlay true
-hermes config set plugins.realms.cursor_theme cua.default
+hermes realms vm doctor
+hermes realms vm install
+hermes realms vm status
+hermes realms vm settings
+hermes realms vm settings --check-updates
 ```
 
-Supported defaults are `realm`, `host`, and `ask`. Idle TTL is positive seconds. `pixman` is an explicit software-rendering option, not an automatic fallback.
+- Files are copied explicitly, never automatically mounted or synchronized. The host private key and SSH agent are not copied or forwarded into the guest; X11 forwarding is also disabled.
+- The guest disk is unencrypted and its desktop account has passwordless sudo. Keep personal tokens and authentication files out of it. Retained disks remain on the host after Stop.
+- Guest networking is enabled by default. QEMU user networking can expose host loopback services through `10.0.2.2`; `plugins.realms.vm.network: false` selects restricted networking. A VM is not a promise of unlimited containment.
+- Host terminal execution does not become guest execution. Targeted guest commands receive their target environment, not the host's API credentials or display/bus handles.
+- Hermes computer-use is wired to the guest driver for capture and input. `/realm shot` is a separate permitted screenshot fallback, not a way around human control or CUA permission checks.
 
-## Boundaries and limitations
+### Selected copies and conflicts
 
-- **GUI isolation is not a hostile-code sandbox.** Ordinary realm terminals deliberately retain development filesystem/network access. Do not treat them as isolation from malicious same-user shell commands. The Cua driver separately runs inside mount/PID/network/IPC namespaces, with only its private runtime, required system files and render nodes exposed.
-- Raw WayVNC is a **0600 Unix socket beneath a 0700 directory**, not an unauthenticated localhost TCP port. Browser capabilities are short-lived, realm-generation-bound, origin-checked and revocable. Tickets are removed from URL fragments before connection and are not persistent app tabs.
-- Standard/bounded/unrestricted computer-use permissions remain Hermes's responsibility; realms do not grant additional authority. A deny-input approval policy is honored before input; this host has no built-in `approvals.mode: read-only` setting. User takeover is an additional input prohibition, not a reason to escalate to another input mechanism.
-- Remote-session Watch/Pop out is disabled before issuing a capability: a local-only listener cannot be assumed reachable through a remote connection.
-- Stock labwc/Cua window metadata can have missing PID/bounds. Realm automation uses an explicit desktop target rather than pretending unreliable app metadata is trustworthy. Window counts use the actual private foreign-toplevel protocol, not process counts.
-- Cursor overlay support is compositor/driver-dependent; capture and cursor verification receipts distinguish the supported native-cursor fallback from themed overlays.
-- Display locking and machine suspension are different. The manager uses a suspend inhibitor while active. Historical lock tests do not establish behavior on the current host/build; the latest core-workflow E2E did not lock the physical host.
+`/realm push SOURCE [GUEST_PATH]` copies a selected host file/tree to the VM. `/realm pull GUEST_PATH LOCAL_PATH` requires an explicit host destination. Quote literal paths; spaces, Unicode, quotes, backslashes and wildcard characters are data, not glob selections.
 
-## Verification
+Directory push uses its exact selected guest directory. Pull treats an existing destination directory as a **container** and returns the final path beneath it. Check the returned `destination`, especially on repeated copies.
 
-[`docs/verification.md`](docs/verification.md) distinguishes historical results, the latest privately audited core-workflow E2E, and publication-cleanup checks. Raw screenshots, transcripts, logs and companion patches are intentionally not distributed. A cleaned working tree alone does not remove private data from Git history.
+Different existing bytes, entry types or link targets are conflicts, not permission to overwrite. Identical compatible entries are left in place; non-conflicting additions may be merged. Export changed guest work into a fresh explicit location, then inspect and reconcile it with the host project. Preserve both copies on conflict. Transfers are not crash-atomic whole-tree synchronization: interrupted work can need inspection, and cleanup must not erase a concurrent replacement.
 
-For the integration suite, use the companion Hermes checkout's canonical runner (it provides the expected test environment):
+### Configuration
+
+Values are under `plugins.realms` in the selected profile's config:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `default_kind` | `realm` | Kind selected when no kind was requested |
+| `vm.memory` | `3072` | Configured guest RAM in MiB |
+| `vm.network` | `true` | Whether guest networking is unrestricted |
+| `vm.disk_size` | `40G` | Virtual size used when preparing the base image |
+| `vm.boot_timeout` | `180` | SSH boot-readiness timeout in seconds |
+| `vm.omarchy_vm_path` | *(vendored)* | Explicit custom already-headless VM launcher |
+
+A retained workspace restarts from its frozen launch specification; changing profile defaults is not a promise to mutate an existing guest. Base-image update checks are opt-in. An unavailable update check reports unknown, not “up to date”; checking does not download or replace the current base.
+
+`hermes realms vm clean` removes stale ISO downloads and reports preserved workspaces. It does **not** delete supposedly orphaned guest disks. `remove-base` refuses while retained workspace data depends on the base. Use the explicit administrative Delete commands below for stopped retained workspaces. Native session Delete controls are still being integrated; do not substitute generic Clean or guessed filesystem cleanup for Delete.
+
+## Manual controls and lifetime
+
+The legacy `default_mode` values remain configuration vocabulary, not parent execution routes: `realm` permits target use, while `host`/`ask` require re-enabling/selecting target use. None makes ordinary terminal/file operations private or grants physical-desktop input.
+
+| Control | Current target behavior |
+|---|---|
+| `/realm on [realm\|omarchy]` | Select/re-enable the kind. Plain `on` preserves the chosen kind. Regular allocation is lazy until a targeted operation; VM selection currently starts/reuses the guest. Consented setup eagerly starts either kind. |
+| `/realm status` | Inspect requested kind, readiness, live/stopped/recovery state and target diagnostics independently of CUA. |
+| `/realm size WIDTHxHEIGHT` | Resize the selected live target. |
+| `/realm watch` / Desktop Watch | Open a view-only viewer; observing does not grant input permission. |
+| Desktop Pop out | Open the target in a separate viewer window, initially view-only. |
+| `/realm repair` | Reset only the selected running target's CUA connection. |
+| `/realm off` / Disable | Revoke agent target use and pending setup intent, retaining the running target, workspace and human viewing. Not an escape to host execution. |
+| `/realm stop` / Stop | End owned compute while retaining modern workspace data. It does not disable future explicitly requested target use. |
+
+An explicit Disable persists across backend restarts. The agent's `on` action cannot clear it, switch kinds around it, or revoke pending setup intent. The user can re-enable with `/realm on` or the existing desktop setup review. An unset session preference is different: the agent may select a target when needed, even when the profile default is `host`. Ordinary tools and human viewing remain available while disabled.
+
+Save application changes before Stop: preserving workspace files/disks is not preserving unsaved application memory. Normal turn completion does not stop the target. Session finalization, owner loss or idle retirement end compute according to lifecycle policy while retaining modern workspaces. Restart reuses verified work with a fresh compute incarnation; missing receipts or unregistered work block silent replacement. Delete is a distinct destructive operation, not implied by Stop, Disable, Repair, viewer close or cleanup.
+
+Watch/Pop out require a local connection unless an explicit viewer tunnel is available. Authenticated owner-scoped renewal keeps a live viewer authorized without reopening it. Do not persist or publish viewer tickets. Ordinary transport loss reconnects with bounded backoff in view-only mode; revoked authorization is terminal and needs a fresh Watch. Human-control interruption retains exclusion until explicit recovery/handback, and unrelated parent work can continue. Never use a shell capture/input utility to bypass that exclusion.
+
+Viewing is not a guarantee of indefinite compute lifetime. A locked screen is also not a suspended or powered-off host; lock-independent operation needs native qualification on the intended setup.
+
+### Explicit administrative Delete
+
+Delete is interactive and separate from Stop. Inspect `hermes realms list` or `hermes realms vm list` in the intended profile to obtain the exact target ID and its `session_id`, then use the matching kind:
 
 ```sh
-cd /absolute/path/to/compatible-hermes-checkout
-scripts/run_tests.sh /absolute/path/to/hermes-realms/tests --file-retries 0
+hermes realms delete ID --session-id OWNER
+hermes realms vm delete ID --session-id OWNER
 ```
 
-For the real browser viewer lane, provide the absolute installed Playwright module path:
+The command requires a terminal and displays a target-specific phrase to type exactly. It refuses running compute, a mismatched owner, and a changed workspace/compute/registry snapshot. A stop/start/stop cycle during confirmation invalidates the prompt even if the target ID is unchanged. Cancellation or noninteractive input deletes nothing; there is no force/yes flag or automatic Stop.
+
+Confirmed deletion removes the selected retained workspace, not shared VM base data or another session's work. An interrupted `deleting` operation requires fresh inspection and confirmation before retrying. `--session-id` is an administrative selection check, not authenticated conversation identity or a security boundary against other programs running as the same user. These commands are not a model-tool Delete action or a `/realm delete` slash command.
+
+## Legacy upgrade safety
+
+Older regular Realms may keep HOME only under volatile `/run`, and their already-running guardians may hold destructive cleanup code even after source files change. Updating the files does not migrate those processes.
+
+The candidate's manager/integration guards refuse unsafe legacy Start/Stop/finalize/unload and leave an export-required warning in status rather than triggering new destructive teardown or allocating replacement work. These guards are **not an upgrader or a shutdown veto**: they do not neutralize the old guardian, host termination, idle cleanup or reboot. Preserve and verify recoverable work before any upgrade/recovery/disposal that could end that old lifecycle.
+
+For selected saved work from an older **regular Realm**, follow [Manual export and cold recovery](docs/legacy-recovery.md) **before** upgrading or retiring the old runtime. The administrator verifies a durable external copy, retires the old Realm, restores into a new workspace and reviews conversation permissions separately. This is not automatic active-legacy handoff, whole-HOME or VM-disk migration. Complete cross-surface permission migration remains **not qualified**.
+
+### Review earlier execution permissions
+
+The ownership ledger distinguishes optional-target conversations from earlier
+`realm`, `ask`, or unset permissions. Missing or unrecognized metadata is not
+evidence of a fresh conversation. Protected conversations pause execution in
+the existing tool-execution middleware, including file reads, browsers, Python,
+delegation and deferred execution. Only nonexecuting discovery/clarification
+and Realm status remain available to the agent. An explicitly stored legacy
+`host` choice retains ordinary backend access, but cannot re-enable targets
+without review. Manual Disable never converts a held conversation.
+
+On a cold candidate runtime, use **Use optional targets…** in this conversation's
+existing Realm status controls. The manual CLI/gateway equivalent is **`/realm
+review`**. Both require a new explicit native decision, independently of YOLO,
+approval-off or remembered tool grants. Cancel, unavailable consent transport,
+changed owner/profile/backend, or changed review scope leaves permissions alone.
+After acceptance, make a new explicit tool attempt; the held operation is not
+replayed. Ordinary tools use the conversation's configured original backend,
+not necessarily the Desktop client's machine. Physical-desktop authority is not
+granted. Explicit mode/kind and Disable remain unchanged; an unset mode becomes
+stored `ask` in the acceptance transaction so the reviewed unselected state
+cannot change with a later profile default. Converted unset/ask target use
+stays unselected until explicitly enabled.
+
+This is permission conversion only: no prompt/history rewriting, mode reset,
+target startup, guest adoption, export, Stop or Delete. It does not establish
+data durability or authorize retirement of old compute. An attached old parent
+execution lease refuses review. Before retiring an active legacy regular Realm,
+export and verify its selected saved work using the manual procedure above;
+permission acceptance does not perform that recovery. Freshness is
+published by unseeded native session creation, classic CLI creation and `/new`,
+and core-generated agent IDs. CLI `/resume` and `/branch` remain continuations;
+caller-supplied IDs without trusted lifecycle provenance remain conservative
+and may require review even when the caller intended a new session.
+
+For modern sessions, stop owned compute before disabling the runtime and restarting its backend. Disabling the UI alone changes no backend authority. Retained profile data and the explicitly installed driver are not implicitly deleted.
+
+## Verification scope
+
+Ordinary tests exercise registration, generic target routing, ownership failures, retention, conflict-safe transfer and UI behavior with isolated profiles. Passing those tests is not proof of a running app or guest.
+
+Native tests are separately marked `integration`. Use the canonical runner in an explicitly approved disposable environment, with actual prerequisites and retries disabled; `--include-integration` alone does not select marked tests:
 
 ```sh
-REALMS_PLAYWRIGHT_MODULE=/absolute/path/to/node_modules/playwright \
-  .venv/bin/python scripts/test_viewer.py
+HOME="$(mktemp -d)" scripts/run_tests.sh \
+  tests/plugins/test_bundled_realms_cli.py \
+  tests/plugins/test_realms_import_runtime.py \
+  tests/plugins/test_realms_setup.py \
+  -m integration --file-retries 0 -j 1 -W error
 ```
 
-The script launches real labwc, GTK, WayVNC, and Chromium, asserts view-only/takeover/return behavior, and stops its owned realm. Hardware/systemd tests require the appropriate Linux session; their skips must not be reported as passed acceptance tests.
+Some setup cases download the pinned driver. Packaging must use the supported build toolchain; imports, editable fixtures or a source build do not establish packaged native acceptance. Full Desktop consent/retry/source-switch, both target kinds, real model discovery, human takeover, locked-screen behavior and final-candidate continuity require their own native evidence. Do not infer those results from screenshots or mock UI tests, and do not call this proposal release-ready while its qualification gates remain open.
+
+### Known limitations
+
+- **Delegated sub-agents.** A sub-agent that requests a Realm target (`terminal(target="realm")` or `computer_use`) gets its own separate private Realm as a new owner. It does not inherit the parent's `/realm off` or chosen kind. The child's Realm is not stopped when the sub-agent finishes; it idles out after `plugins.realms.idle_ttl` (default 1800 seconds, 30 minutes) and its workspace is kept. A child cannot reach another owner's Realm, including its parent's.
+- **Physical screen lock:** not tested.
 
 ## License
 
-Original project code is available under the [MIT License](LICENSE). Vendored components retain their own licenses and attribution; see [third-party notices](realms/web/THIRD_PARTY.md). The MIT license does not replace those component licenses.
-
-## Source layout
-
-- `realms/`: manager, lifecycle, containment, session integration, window reader, viewer authority and RFB bridge.
-- `plugin.py`, `plugin.yaml`, `dashboard/`: native Hermes registration and authenticated, owner-scoped API.
-- `desktop/`: external desktop plugin using generic session contributions.
-- `omarchy/`: opt-in Lua scratchpad integration and usage guide.
-- `skills/realms/`: agent-facing workflow and safety instructions.
-- `tests/`, `scripts/`: regression tests and real browser harness.
+Original code: [MIT](LICENSE). Vendored assets: [third-party notices](realms/web/THIRD_PARTY.md), including all original license and author files. The MIT license does not replace the component licenses.

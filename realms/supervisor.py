@@ -15,12 +15,16 @@ if __package__ in (None, ""):
 from .lifecycle import Registry, alive, atomic_json, stop_scope, remove_runtime
 
 
-def cleanup(home, realm_id):
+def cleanup(home, realm_id, generation=None):
     registry = Registry(home)
     with registry.lock():
         if not registry.path(realm_id).exists():
             return
         record = registry.get(realm_id)
+        if generation is not None and record["generation"] != generation:
+            return
+        if record["status"] in ("stopped", "deleting"):
+            return
         stop_scope(record)
         remove_runtime(registry, record)
 
@@ -67,7 +71,7 @@ def run(home, realm_id):
             if time.monotonic() > deadline:
                 raise RuntimeError("realm startup timed out")
             time.sleep(0.1)
-        startup = json.loads(ready.read_text())
+        startup = json.loads(ready.read_text(encoding="utf-8"))
         while all(alive(process) for process in startup["processes"].values()):
             with registry.lock():
                 current = registry.get(realm_id)
@@ -99,7 +103,7 @@ def run(home, realm_id):
         print(str(exc), file=sys.stderr, flush=True)
     finally:
         try:
-            cleanup(home, realm_id)
+            cleanup(home, realm_id, record["generation"])
         finally:
             if runner is not None:
                 try:
@@ -110,6 +114,6 @@ def run(home, realm_id):
 
 if __name__ == "__main__":
     if sys.argv[1] == "cleanup":
-        cleanup(sys.argv[2], sys.argv[3])
+        cleanup(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)
     else:
         run(sys.argv[1], sys.argv[2])
