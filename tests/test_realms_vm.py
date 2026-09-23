@@ -263,7 +263,7 @@ def test_guest_ssh_refuses_forwarding_the_users_agent(tmp_path):
     assert "forwardx11 no" in resolved, resolved
     assert "identitiesonly yes" in resolved, resolved
     assert "stricthostkeychecking true" in resolved or "stricthostkeychecking yes" in resolved
-    assert str(tmp_path / "ssh_known_hosts") in resolved
+    assert str(tmp_path / "ssh_known_hosts").lower() in resolved  # `resolved` is lowercased
 
 
 @pytest.mark.linux_only
