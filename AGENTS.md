@@ -1,8 +1,8 @@
 # Hermes Realms
 
 Standalone optional Hermes plugin providing per-session Linux desktops. Start with
-[README.md](README.md), [host integration](integration/README.md), and
-[verification scope](docs/verification.md). Do not depend on machine-local plans,
+[README.md](README.md), [setup](docs/setup.md) (host APIs), and
+[running the tests](docs/testing.md). Do not depend on machine-local plans,
 private sibling checkouts, or archived execution evidence.
 
 ## Development and validation
@@ -11,14 +11,14 @@ private sibling checkouts, or archived execution evidence.
   each slice. Exercise real processes, sockets, discovery and temporary profiles;
   do not fabricate API results or use source-reading tests to claim runtime behavior.
 - Keep realm behavior in this repository. Generic Hermes APIs belong in the
-  separately reviewed host contribution linked in `integration/README.md`; never
+  separately reviewed Hermes host contribution (see `docs/setup.md`); never
   monkeypatch Hermes internals or modify installed/live Hermes.
 - Use isolated worktrees and disposable `HOME`, `HERMES_HOME`, XDG directories and
   Electron user-data for integration tests. UI validation uses a newly built DEV
   app with verified renderer/backend source, never the production desktop.
 - The full native suite requires explicit approval for its test environment. It
   can start compositors, systemd scopes and input-capable services; E2E markers
-  alone do not identify every such test. Follow `docs/verification.md`.
+  alone do not identify every such test. Follow `docs/testing.md`.
 - Every completion claim needs actual execution evidence. Store raw logs,
   screenshots, transcripts and inventories privately outside the repository.
   Put only reviewed, non-sensitive summaries and reproducible commands in docs;

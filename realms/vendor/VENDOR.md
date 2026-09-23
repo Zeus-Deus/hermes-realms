@@ -80,7 +80,7 @@ or fall back to a different release, add packages, or modify the ISO.
 1. Fetch the new upstream `bin/omarchy-vm` and record its SHA-256 here.
 2. Re-apply the local patches above.
 3. Set `VENDORED_SHA256` in `realms/vm_manager.py` to the new digest.
-4. Run `scripts/run_tests.sh tests/plugins/test_bundled_realms_vm.py tests/plugins/test_realms_vm_kernel_preset.py`
+4. Run `python -m pytest tests/test_realms_vm.py tests/test_realms_vm_kernel_preset.py` (see [running the tests](../../docs/testing.md))
    — the headless, parameterisation and CIDATA-default patches are covered by
    behaviour tests that execute the script's own functions, so a dropped patch
    fails there.
