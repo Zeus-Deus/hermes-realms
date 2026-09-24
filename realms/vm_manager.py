@@ -52,7 +52,7 @@ UPSTREAM_SHA256 = "19a51517c2713e033b2f703bfa387a79a9880c1c7a918e327e1327cfde47c
 # The vendored copy *with* those patches applied. Pinned in code rather than in
 # a file beside the script: a checksum an attacker can rewrite pins nothing.
 # Includes the synchronous installer-owned setup-stage hook.
-VENDORED_SHA256 = "75235adf1060d35dbdd8a4409e29a471de61c42535c9876859c38ebb52395dad"
+VENDORED_SHA256 = "51a412e77243e8a7a24e1a3d316fc18160d233d64c6b2605f086b8611abeb015"
 
 # Ports the per-session guests forward SSH on, loopback only. A realm picks the
 # first free one and records it; a collision fails the launch rather than
@@ -1076,7 +1076,7 @@ class VmManager:
         tools = {
             name: shutil.which(name)
             for name in ("qemu-system-x86_64", "qemu-img", "ssh", "scp", "socat",
-                         "jq", "mcopy", "mkfs.vfat", "openssl", "systemd-run",
+                         "jq", "mcopy", "mformat", "openssl", "systemd-run",
                          "systemd-inhibit")
         }
         firmware = {

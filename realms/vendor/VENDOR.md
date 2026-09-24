@@ -67,6 +67,12 @@ installer and records that selected filename, not the last sorted cache entry.
 Custom installers retain their legacy unpinned path; explicit release selection
 refuses them. This input seam does not implement Update/Later consent or UI.
 
+**CIDATA image via `mformat`.** `build_cidata` formats the 4 MB answer disk with
+`mformat -i "$CIDATA" -v CIDATA ::` (mtools) instead of `mkfs.vfat` (dosfstools).
+The result is the same FAT12 image labelled `CIDATA`, filled by the same
+`mcopy`. It drops the dosfstools prerequisite and keeps the plugin clear of the
+Hermes plugin scanner's filesystem-format rule.
+
 **Stock installer kernel defaults.** CIDATA omits both `kernels` and
 `omarchy_install.storage.kernel`. The selected stock installer owns that choice:
 generic 4.0.3 defaults to `linux`, while 4.0.4 defaults to `linux-omarchy`.

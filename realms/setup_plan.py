@@ -20,13 +20,13 @@ PACKAGES = {
     "/usr/lib/at-spi2-registryd": "at-spi2-core",
     "qemu-system-x86_64": "qemu-full", "qemu-img": "qemu-full",
     "ssh": "openssh", "scp": "openssh", "socat": "socat", "jq": "jq",
-    "mcopy": "mtools", "mkfs.vfat": "dosfstools", "openssl": "openssl",
+    "mcopy": "mtools", "mformat": "mtools", "openssl": "openssl",
     "curl": "curl", "gpg": "gnupg", "pacman": "pacman",
     "qemu-full": "qemu-full", "edk2-ovmf": "edk2-ovmf", "mtools": "mtools",
 }
 NATIVE_TOOLS = tuple(PACKAGES)[:12]
 VM_TOOLS = ("qemu-system-x86_64", "qemu-img", "ssh", "scp", "socat", "jq",
-            "mcopy", "mkfs.vfat", "openssl", "systemd-run", "systemd-inhibit", "curl", "gpg", "pacman")
+            "mcopy", "mformat", "openssl", "systemd-run", "systemd-inhibit", "curl", "gpg", "pacman")
 
 
 def confined(home, path):

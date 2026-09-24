@@ -39,7 +39,7 @@ openssl() { printf '%s\n' synthetic-hash; }
 timedatectl() { printf '%s\n' UTC; }
 git() { return 1; }
 truncate() { :; }
-mkfs.vfat() { :; }
+mformat() { :; }
 mcopy() { shift 2; for file; do [[ $file == ::/ ]] || cp "$file" "$OUTPUT/"; done; }
 build_cidata
 """,

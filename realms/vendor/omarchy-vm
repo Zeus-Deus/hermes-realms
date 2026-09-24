@@ -340,7 +340,7 @@ EOF
 
   rm -f "$CIDATA"
   truncate -s 4M "$CIDATA"
-  mkfs.vfat -n CIDATA "$CIDATA" >/dev/null
+  mformat -i "$CIDATA" -v CIDATA ::
   mcopy -i "$CIDATA" "$directory"/* ::/
   rm -rf "$directory"
 }
