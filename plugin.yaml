@@ -2,7 +2,7 @@ name: hermes-realms
 version: 0.2.0
 kind: standalone
 description: Profile-scoped private Linux desktops for Hermes conversations
-requires_hermes: ">=0.22"
+requires_hermes: ">=0.21"
 platforms:
   - linux
 python_dependencies:
