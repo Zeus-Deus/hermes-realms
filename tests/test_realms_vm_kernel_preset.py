@@ -67,7 +67,7 @@ build_cidata
     return {path.name: path.read_text() for path in output.iterdir()}
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("disk_size", ["40G", "64G"])
 def test_cidata_defers_both_kernel_choices_without_changing_vm_intent(
     tmp_path, disk_size

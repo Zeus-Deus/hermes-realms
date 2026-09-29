@@ -11,7 +11,7 @@ ROOT = HERMES_ROOT
 PLUGIN = PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_explicit_profile_settings_are_canonical_and_read_only(tmp_path):
     home = tmp_path / "requested"
     home.mkdir()

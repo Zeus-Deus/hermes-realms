@@ -11,7 +11,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("arguments", [
     {"action": "push", "destination": "/guest-copy"},
     {"action": "push", "path": "", "destination": "/guest-copy"},
@@ -24,7 +24,7 @@ def test_transfer_requires_selected_path_before_serializing(arguments):
         plugin["_raw_command"](arguments)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("surface", ["tool", "slash"])
 @pytest.mark.parametrize("action", ["push", "pull"])
 def test_transfer_dispatch_preserves_literal_paths(tmp_path, monkeypatch, surface, action):

@@ -18,7 +18,7 @@ common = runpy.run_path(str(Path(__file__).with_name("test_realms_base_update_pu
 load, profile, update = common["load"], common["profile"], common["update"]
 wait_for, join_job, BINDING = common["wait_for"], common["join_job"], common["BINDING"]
 ROOT = HERMES_ROOT
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.fixture

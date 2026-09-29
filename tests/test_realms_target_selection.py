@@ -6,7 +6,7 @@ import runpy
 import pytest
 from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 ROOT = HERMES_ROOT
 
 

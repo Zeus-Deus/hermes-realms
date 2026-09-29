@@ -8,7 +8,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_missing_driver_refuses_realm_selection_and_explains_recovery(tmp_path, monkeypatch):
     load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
     service = load("integration").RealmIntegration(tmp_path / "requested")
@@ -34,7 +34,7 @@ def test_missing_driver_refuses_realm_selection_and_explains_recovery(tmp_path, 
     assert not service.driver_executable.exists()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.integration
 def test_setup_installs_repairs_and_executes_pinned_driver_in_own_profile(tmp_path, monkeypatch):
     import hashlib

@@ -15,7 +15,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 PROCESS = PLUGIN_ROOT / "realms/setup_process.py"
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.mark.parametrize("kind", ["running", "cancelling", "fifo", "directory", "symlink", "missing", "malformed", "oversized", "nonmapping", "unknown"])

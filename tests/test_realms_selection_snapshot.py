@@ -7,7 +7,7 @@ import pytest
 
 from test_realms_vm_retention import load
 
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def stores(tmp_path, kind):

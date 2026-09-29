@@ -185,7 +185,7 @@ if __name__ == "__main__":
 else:
     import pytest
 
-    pytestmark = [pytest.mark.linux_only, pytest.mark.integration]
+    pytestmark = [pytest.mark.platforms("linux"), pytest.mark.integration]
 
     @pytest.mark.parametrize("death", ["normal", "old-owner-after-freeze", "adopter-after-freeze"])
     def test_legacy_routing_then_adoption_preserves_guest_and_peer(tmp_path, death):

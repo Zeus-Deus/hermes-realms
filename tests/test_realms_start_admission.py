@@ -9,7 +9,7 @@ from test_realms_vm_retention import owned
 from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
 ROOT = HERMES_ROOT
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.mark.parametrize("kind", ["realm", "omarchy-vm"])

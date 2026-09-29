@@ -13,7 +13,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
 base_tests = runpy.run_path(str(Path(__file__).with_name("test_realms_vm_base_updates.py")))
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 A, B = "4.0.2", "4.0.3"
 
 # Keep fetch_iso/verify_iso/cmd_install intact. Only external operations are inert.

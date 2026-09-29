@@ -15,7 +15,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def test_prepare_is_readonly_and_consent_binds_owner_home_kind_and_revision(tmp_path, monkeypatch):

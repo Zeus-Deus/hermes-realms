@@ -32,7 +32,7 @@ def targets(tmp_path, monkeypatch, request):
     return service, owner, request.param, rows
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("command", ["watch", "shot", "repair", "size 800x600", "push source", "pull source destination"])
 def test_live_action_refuses_stopped_selected_target_without_using_other_kind(targets, command):
     service, owner, kind, rows = targets
@@ -42,7 +42,7 @@ def test_live_action_refuses_stopped_selected_target_without_using_other_kind(ta
     assert rows[kind]["status"] == "stopped"
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_watch_selects_current_live_kind_not_retained_other_kind(targets, monkeypatch):
     service, owner, kind, rows = targets
     other = "omarchy-vm" if kind == "realm" else "realm"

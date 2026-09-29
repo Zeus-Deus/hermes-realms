@@ -10,7 +10,7 @@ from realms_test_paths import PLUGIN_ROOT
 PLUGIN = PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("kind", ["realm", "omarchy-vm"])
 def test_registered_agent_cannot_clear_disable_but_manual_reenable_can(tmp_path, monkeypatch, kind):
     home = tmp_path / "profile"

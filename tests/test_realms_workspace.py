@@ -24,7 +24,7 @@ def record_for(home):
     }
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_workspace_retained_across_start_failure_and_owner_checks(tmp_path):
     life = load("lifecycle")
     workspace = load("workspace")
@@ -61,7 +61,7 @@ def test_workspace_retained_across_start_failure_and_owner_checks(tmp_path):
         registry.get(record["id"])
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("failure", ["home", "receipt", "directory", "registry"])
 def test_explicit_delete_resumes_after_partial_removal(tmp_path, monkeypatch, failure):
     import shutil
@@ -128,7 +128,7 @@ def test_explicit_delete_resumes_after_partial_removal(tmp_path, monkeypatch, fa
     assert [row["id"] for row in fresh.list()] == [peer["id"]]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_delete_authority_cannot_bless_missing_or_replaced_home(tmp_path, monkeypatch):
     life, workspace, managers = load("lifecycle"), load("workspace"), load("manager")
     manager = managers.Manager(tmp_path)
@@ -179,7 +179,7 @@ def test_delete_authority_cannot_bless_missing_or_replaced_home(tmp_path, monkey
 
 
 @pytest.mark.integration
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_legacy_only_copy_is_retained_without_live_migration(tmp_path):
     import shutil
 

@@ -9,7 +9,7 @@ from realms_test_paths import PLUGIN_ROOT
 MODULE = PLUGIN_ROOT / 'realms/vm_transfer_archive.py'
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.integration
 @pytest.mark.parametrize('placement', ['root', 'nested', 'full', 'nested-full', 'nested-race'])
 def test_transfer_publishes_atomically_on_destination_filesystem(tmp_path, placement):

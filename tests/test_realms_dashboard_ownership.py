@@ -9,7 +9,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
 ROOT = HERMES_ROOT
 PLUGIN = PLUGIN_ROOT
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("registered", [False, True])
 def test_cold_prepare_is_read_only_even_for_unknown_owner(tmp_path, monkeypatch, registered):
     home = tmp_path / "profile"

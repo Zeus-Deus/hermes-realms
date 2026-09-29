@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 ROOT = HERMES_ROOT
 fixtures = runpy.run_path(str(PLUGIN_ROOT / "tests/test_realms_delete_cli.py"))
 load = fixtures["load"]

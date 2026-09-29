@@ -13,7 +13,7 @@ PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_guest_connections_pin_provisioned_key_and_disable_ambient_ssh(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()

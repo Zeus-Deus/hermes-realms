@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from test_realms_vm_retention import owned, fresh, load
 
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def test_cancel_at_final_admission_retains_clone_and_allows_new_operation(owned, monkeypatch):

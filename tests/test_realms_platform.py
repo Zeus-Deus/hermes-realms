@@ -45,11 +45,11 @@ assert not (home / 'plugin-data' / 'hermes-realms').exists()
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.windows_only
+@pytest.mark.platforms("windows")
 def test_enabled_realms_is_inert_on_windows(tmp_path):
     _assert_unsupported_host_is_inert(tmp_path)
 
 
-@pytest.mark.macos_only
+@pytest.mark.platforms("macos")
 def test_enabled_realms_is_inert_on_macos(tmp_path):
     _assert_unsupported_host_is_inert(tmp_path)

@@ -7,7 +7,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 load = runpy.run_path(str(PLUGIN_ROOT / 'realms/_binding.py'))['load_runtime']
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def test_vm_proxy_only_maps_owned_socket_and_exact_approved_manifest(tmp_path):

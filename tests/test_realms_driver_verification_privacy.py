@@ -8,7 +8,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("inherited", [None, "1"])
 def test_install_verification_disables_telemetry(tmp_path, monkeypatch, inherited):
     if inherited is None:

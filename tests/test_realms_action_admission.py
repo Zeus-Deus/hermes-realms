@@ -10,7 +10,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("mode", ["host", "ask"])
 @pytest.mark.parametrize("arguments,kind,method", [
     ({"action": "size", "size": "1024x768"}, "realm", "resize"),

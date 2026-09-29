@@ -10,7 +10,7 @@ import pytest
 
 from test_realms_vm_retention import owned, fresh, load
 
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.mark.parametrize('state', ['cold', 'stopped'])

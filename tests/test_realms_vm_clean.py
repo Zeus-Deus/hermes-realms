@@ -9,7 +9,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_clean_preserves_unregistered_workspace_and_reports_it(tmp_path, monkeypatch, capsys):
     home = tmp_path / "profile"
     monkeypatch.setenv("HERMES_HOME", str(home))

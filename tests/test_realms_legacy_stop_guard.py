@@ -10,7 +10,7 @@ from realms_test_paths import PLUGIN_ROOT
 
 ROOT = PLUGIN_ROOT
 load = run_path(str(ROOT / "realms/_binding.py"))["load_runtime"]
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def record_for(home, owner="legacy-owner", status="running"):

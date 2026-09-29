@@ -30,7 +30,7 @@ def test_renewal_preserves_scope_privilege_expiry_and_revocation():
     assert not tickets.renew(token, "owner", "generation", ttl=10)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("kind,realm_id", [("realm", "r-fixture"), ("omarchy-vm", "v-fixture")])
 def test_renew_route_preserves_owner_locality_and_generation(tmp_path, monkeypatch, kind, realm_id):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))

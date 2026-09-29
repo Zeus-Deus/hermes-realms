@@ -9,7 +9,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 load = runpy.run_path(str(PLUGIN_ROOT / 'realms/_binding.py'))['load_runtime']
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def test_stream_drains_diagnostics_without_inheriting_ambient_secret(monkeypatch):

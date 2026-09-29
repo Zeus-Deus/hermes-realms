@@ -11,7 +11,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 PLUGIN = PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.integration
 def test_canonical_runtime_launches_jobs_and_contained_driver(tmp_path):
     code = r'''

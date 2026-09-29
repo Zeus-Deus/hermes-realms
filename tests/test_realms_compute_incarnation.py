@@ -39,7 +39,7 @@ def vm_target(tmp_path, monkeypatch):
         service._attachments.clear()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("purpose", ["terminal", "cua"])
 @pytest.mark.parametrize("changed", ["compute_generation", "invocation_id"])
 def test_old_vm_lease_refuses_changed_compute(vm_target, purpose, changed):
@@ -53,7 +53,7 @@ def test_old_vm_lease_refuses_changed_compute(vm_target, purpose, changed):
         old.check()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("purpose", ["terminal", "cua"])
 def test_explicit_vm_resolution_replaces_compute_lease(vm_target, purpose):
     from hermes_cli.session_execution import SessionExecutionError

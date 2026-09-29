@@ -10,7 +10,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT, install_user_plugin
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_real_host_parser_keeps_root_command_separate_from_exec_argv(tmp_path):
     code = r'''
 import json, sys, types
@@ -53,7 +53,7 @@ assert sys.path == before
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.integration
 def test_native_cli_exec_preserves_host_dispatch_and_child_exit(tmp_path):
     code = r'''

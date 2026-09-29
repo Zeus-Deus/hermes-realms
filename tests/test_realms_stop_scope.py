@@ -6,7 +6,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.integration
 @pytest.mark.parametrize("post_query_unavailable", [False, True], ids=["active", "unknown"])
 def test_failed_stop_requires_fresh_terminal_observation(

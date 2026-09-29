@@ -11,7 +11,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("background", [False, True])
 @pytest.mark.parametrize("transition", ["unchanged", "takeover", "handback"])
 def test_target_approval_wait_preserves_control_epoch(tmp_path, monkeypatch, background, transition):

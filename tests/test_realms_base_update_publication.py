@@ -11,7 +11,7 @@ common = runpy.run_path(str(Path(__file__).with_name("test_realms_base_update_fl
 load, profile = common["load"], common["profile"]
 wait_for, join_job, BINDING = common["wait_for"], common["join_job"], common["BINDING"]
 images = runpy.run_path(str(Path(__file__).with_name("test_realms_vm_base_updates.py")))
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 # Fresh child imports production worker/manager. Only external install/compute
 # observations are replaced. The supervisor, config, progress, selection,

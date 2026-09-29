@@ -6,7 +6,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("stage", ["prerequisites", "boot"])
 def test_failed_kind_switch_preserves_previous_mode_and_kind(tmp_path, monkeypatch, stage):
     load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]

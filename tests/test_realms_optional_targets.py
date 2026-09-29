@@ -12,7 +12,7 @@ def load(name):
     return runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"](name)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("tool_name", ["terminal", "read_file", "clarify", "execute_code"])
 def test_fresh_conversation_ordinary_tools_do_not_prepare_a_realm(tmp_path, monkeypatch, tool_name):
     home = tmp_path / "agent-home"
@@ -36,7 +36,7 @@ def test_fresh_conversation_ordinary_tools_do_not_prepare_a_realm(tmp_path, monk
     assert service._vm is None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_starting_a_private_desktop_does_not_retarget_parent_tools(tmp_path, tmp_path_factory, monkeypatch):
     import socket
     from hermes_cli.session_execution import (
@@ -77,7 +77,7 @@ def test_starting_a_private_desktop_does_not_retarget_parent_tools(tmp_path, tmp
             remove_session_execution_context(owner)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_plugin_exposes_management_and_cua_before_driver_setup(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from tools.computer_use import tool as cua_tool
@@ -114,7 +114,7 @@ def test_plugin_exposes_management_and_cua_before_driver_setup(tmp_path, monkeyp
     assert not cua_tool.check_computer_use_requirements()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("action", ["off", "stop"])
 def test_manual_target_actions_do_not_remove_an_unrelated_parent_context(tmp_path, monkeypatch, action):
     from hermes_cli.session_execution import (
@@ -134,7 +134,7 @@ def test_manual_target_actions_do_not_remove_an_unrelated_parent_context(tmp_pat
         remove_session_execution_context(owner)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_disable_revokes_agent_routes_without_stopping_the_viewed_target(tmp_path, monkeypatch):
     from hermes_cli.session_execution import (
         SessionExecutionContext, SessionExecutionError, register_session_execution_context,

@@ -15,7 +15,7 @@ from realms_test_paths import PLUGIN_ROOT
 
 PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 @pytest.mark.parametrize("interruption", ["expired", "dead-owner", "disconnected"])

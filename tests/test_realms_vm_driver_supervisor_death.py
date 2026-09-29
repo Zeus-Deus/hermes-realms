@@ -203,7 +203,7 @@ if __name__ == "__main__":
 else:
     import pytest
 
-    pytestmark = pytest.mark.linux_only
+    pytestmark = pytest.mark.platforms("linux")
 
     @pytest.mark.parametrize("death_signal", ["SIGTERM", "SIGKILL"])
     def test_supervisor_death_retires_only_its_owned_driver(tmp_path, death_signal):

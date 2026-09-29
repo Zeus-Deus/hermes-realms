@@ -19,7 +19,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
 ROOT = HERMES_ROOT
 MODULE = PLUGIN_ROOT / "realms/vm_driver_lifetime.py"
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 # The witness is published only after the signal handler, stdin and fd checks.
 # Its stdout deliberately looks like valid control: it must NOT renew the lease.

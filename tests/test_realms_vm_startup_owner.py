@@ -154,7 +154,7 @@ if __name__ == "__main__":
 else:
     import pytest
 
-    pytestmark = [pytest.mark.linux_only, pytest.mark.integration]
+    pytestmark = [pytest.mark.platforms("linux"), pytest.mark.integration]
 
     def test_owner_sigkill_before_readiness_retires_starting_unit(tmp_path):
         lifecycle = load("lifecycle")

@@ -8,7 +8,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("requested", ["realm", "omarchy-vm"])
 def test_target_request_survives_failed_setup_without_allocating_or_retargeting(tmp_path, monkeypatch, requested):
     load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
@@ -39,7 +39,7 @@ def test_target_request_survives_failed_setup_without_allocating_or_retargeting(
     assert resolve_session_execution_context(session_id=owner, task_id="task") is None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("identity", [{}, {"stored_session_id": "historical"}])
 def test_unbound_status_does_not_imply_a_target_request(tmp_path, monkeypatch, identity):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))

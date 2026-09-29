@@ -14,7 +14,7 @@ PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("has_base", [False, True])
 def test_vm_review_reports_download_uncertainty_or_reuse_without_io(tmp_path, monkeypatch, has_base):
     home = tmp_path / "profile"

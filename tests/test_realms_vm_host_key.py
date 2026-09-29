@@ -9,7 +9,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_guest_connections_use_only_the_generation_pin(tmp_path):
     load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
     module = load("vm_manager")
@@ -28,7 +28,7 @@ def test_guest_connections_use_only_the_generation_pin(tmp_path):
     assert settings["forwardagent"] == "no"
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_reuse_does_not_reenroll_a_lost_host_key(tmp_path, monkeypatch):
     load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
     module = load("vm_manager")

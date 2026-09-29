@@ -72,7 +72,7 @@ def repair_fixture(tmp_path, monkeypatch, request):
             callback()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("surface", ["tool", "slash"])
 def test_repair_invalidates_only_owners_cua_lease(repair_fixture, surface):
     from hermes_cli.session_execution import SessionExecutionError, resolve_session_execution_context
@@ -95,7 +95,7 @@ def test_repair_invalidates_only_owners_cua_lease(repair_fixture, surface):
     assert f.service._attachments[f.owner][2] == f.record["id"]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("refusal", ["human", "absent", "stopped", "arguments", "disabled", "foreign-identity"])
 def test_repair_refusal_preserves_all_leases(repair_fixture, monkeypatch, refusal):
     f = repair_fixture
@@ -121,7 +121,7 @@ def test_repair_refusal_preserves_all_leases(repair_fixture, monkeypatch, refusa
         lease.check()
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("transition", ["unchanged", "held", "takeover", "handback"])
 def test_shot_fences_human_control_and_discards_revoked_pixels(repair_fixture, monkeypatch, transition):
     from PIL import Image

@@ -11,7 +11,7 @@ import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 MODULE = PLUGIN_ROOT / 'realms/vm_transfer_archive.py'
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def packed(api, source):

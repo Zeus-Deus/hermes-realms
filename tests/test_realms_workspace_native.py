@@ -27,7 +27,7 @@ def retired(record):
 
 
 @pytest.mark.integration
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_stop_restart_retains_private_bytes_and_owner(tmp_path):
     manager = load("manager").Manager(tmp_path)
     records = []
@@ -81,7 +81,7 @@ def test_stop_restart_retains_private_bytes_and_owner(tmp_path):
 
 
 @pytest.mark.integration
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("failure", ["exception", "owner-exit"])
 def test_interrupted_delete_allows_fresh_manager_peer_start(tmp_path, monkeypatch, failure):
     import json
@@ -152,7 +152,7 @@ load("manager").Manager(sys.argv[2]).delete(sys.argv[3], session_id="delete-owne
 
 
 @pytest.mark.integration
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("cause", ["idle", "guardian", "component"])
 def test_automatic_compute_cleanup_retains_workspace(tmp_path, cause):
     import subprocess
@@ -203,7 +203,7 @@ def test_automatic_compute_cleanup_retains_workspace(tmp_path, cause):
 
 
 @pytest.mark.integration
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_failed_runtime_removal_retains_work_and_retryable_ownership(tmp_path):
     life = load("lifecycle")
     manager = load("manager").Manager(tmp_path)

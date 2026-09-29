@@ -10,7 +10,7 @@ from realms_test_paths import PLUGIN_ROOT
 
 load = runpy.run_path(str(PLUGIN_ROOT / 'realms/_binding.py'))['load_runtime']
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=')
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def executable(path, source):

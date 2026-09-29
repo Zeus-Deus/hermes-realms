@@ -9,7 +9,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 ROOT = HERMES_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("kind,state,note_key", [
     ("realm", "stopped", "cleanup_note"),
     ("omarchy-vm", "recovery-required", "recovery_reason"),
@@ -43,7 +43,7 @@ def test_retained_status_preserves_recovery_note_without_live_probes(tmp_path, m
     assert row.get("stats") is None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("state", ["stopped", "running"])
 def test_regular_restart_rechecks_setup_but_live_reuse_does_not(tmp_path, monkeypatch, state):
     home = tmp_path / "profile"

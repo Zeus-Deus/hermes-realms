@@ -11,7 +11,7 @@ ROOT = HERMES_ROOT
 PLUGIN = PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("foreign", ["path", "preloaded"])
 @pytest.mark.parametrize("first", ["native", "dashboard"])
 def test_real_discovery_binds_its_own_runtime(tmp_path, foreign, first):
@@ -90,7 +90,7 @@ finally:
     assert result.returncode == 0, result.stdout + result.stderr
     print(result.stdout.strip())
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("entry", ["cli.py", "realms/launch.py", "realms/bootstrap.py", "realms/supervisor.py"])
 def test_file_entrypoints_ignore_foreign_namespace(tmp_path, entry):
     code = r'''

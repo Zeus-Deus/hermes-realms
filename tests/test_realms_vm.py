@@ -28,7 +28,7 @@ def guard():
     return load("host_guard")
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize(
     "command",
     [
@@ -50,7 +50,7 @@ def test_guard_refuses_host_display_repointing(guard, command):
     assert "/realm off" in message
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize(
     "command",
     [
@@ -67,13 +67,13 @@ def test_guard_allows_ordinary_commands(guard, command):
     assert guard.host_escape(command) is None, command
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_guard_ignores_unparseable_shell_text(guard):
     """Unbalanced quotes are reported as ordinary rather than guessed at."""
     assert guard.host_escape("echo 'unterminated") is None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_vm_settings_round_trip_through_a_launch_spec(tmp_path):
     """A realm's frozen spec must rebuild the same config it was written from.
 
@@ -91,7 +91,7 @@ def test_vm_settings_round_trip_through_a_launch_spec(tmp_path):
     assert config_module.Config(**asdict(original)) == original
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize(
     "settings",
     [
@@ -109,7 +109,7 @@ def test_invalid_vm_settings_are_refused(settings):
         config_module.Config(**settings)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_vendored_script_matches_its_pin():
     """The executed copy is the reviewed one.
 
@@ -123,7 +123,7 @@ def test_vendored_script_matches_its_pin():
     assert digest == vm_manager.VENDORED_SHA256
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_vendored_script_is_headless_and_parameterised(tmp_path):
     """Upstream is single-VM and opens a window; the vendored copy must not.
 
@@ -154,7 +154,7 @@ def test_vendored_script_is_headless_and_parameterised(tmp_path):
     assert "VNC=/run/probe/vnc.sock" in result.stdout
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_tool_arguments_and_slash_text_are_one_grammar():
     """The model tool and the slash command must not drift into separate parsers."""
     plugin = runpy.run_path(str(PLUGIN / "plugin.py"))
@@ -173,7 +173,7 @@ def test_tool_arguments_and_slash_text_are_one_grammar():
         assert render(arguments).split()[0] == action
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_update_check_never_fabricates_a_verdict(tmp_path, monkeypatch):
     """An unreachable release API reports "unknown", not "up to date".
 
@@ -200,7 +200,7 @@ def test_update_check_never_fabricates_a_verdict(tmp_path, monkeypatch):
     assert manager.settings(check_updates=True)["update"]["available"] is False
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_settings_render_does_not_require_the_network(monkeypatch):
     """Rendering the panel must never depend on reaching GitHub."""
     vm_manager = load("vm_manager")
@@ -216,7 +216,7 @@ def test_settings_render_does_not_require_the_network(monkeypatch):
     assert manager.settings()["update"]["available"] is None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("command", [
     "env WAYLAND_DISPLAY=wayland-0 hyprctl dispatch exit",
     "WAYLAND_DISPLAY=wayland-0 hyprctl dispatch exec kitty",
@@ -238,7 +238,7 @@ def test_escape_guard_does_not_trust_its_own_environment(guard, command, monkeyp
     assert guard.host_escape(command) is not None
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_guest_ssh_refuses_forwarding_the_users_agent(tmp_path):
     """Agent forwarding is a per-command opt-in, never inherited from ssh config.
 
@@ -266,7 +266,7 @@ def test_guest_ssh_refuses_forwarding_the_users_agent(tmp_path):
     assert str(tmp_path / "ssh_known_hosts").lower() in resolved  # `resolved` is lowercased
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_network_off_restricts_the_guest_netdev():
     """``vm.network: false`` must reach QEMU as ``restrict=on``.
 
@@ -293,7 +293,7 @@ def test_network_off_restricts_the_guest_netdev():
     assert "OMARCHY_VM_NETDEV_EXTRA" not in on or not on["OMARCHY_VM_NETDEV_EXTRA"]
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_vm_vnc_peer_is_proven_by_the_realms_own_scope(tmp_path):
     """A VM realm's VNC listener is QEMU, not a process the plugin started.
 

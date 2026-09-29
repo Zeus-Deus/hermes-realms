@@ -10,7 +10,7 @@ import yaml
 from realms_test_paths import PLUGIN_ROOT
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 class ViewerFloorTests(unittest.TestCase):
     def test_declared_minimum_dependencies_start_http_and_websocket(self):
         uv = shutil.which("uv")

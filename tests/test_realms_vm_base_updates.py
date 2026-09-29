@@ -13,7 +13,7 @@ from realms_test_paths import HERMES_ROOT, PLUGIN_ROOT
 
 ROOT = HERMES_ROOT
 load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def qemu(*args):

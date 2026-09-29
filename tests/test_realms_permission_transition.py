@@ -13,7 +13,7 @@ REPO = HERMES_ROOT
 PLUGIN = PLUGIN_ROOT
 load = runpy.run_path(str(PLUGIN / "realms/_binding.py"))["load_runtime"]
 integration = load("integration")
-pytestmark = pytest.mark.linux_only
+pytestmark = pytest.mark.platforms("linux")
 
 
 def legacy_home(tmp_path):
