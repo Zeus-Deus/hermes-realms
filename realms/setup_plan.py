@@ -101,8 +101,8 @@ def _prerequisite_plan(home, kind):
     if kind == "realm":
         from . import install_driver
         description = setup_module()["describe"](home)
-        ready = description["ready"]
-        revision = description["revision"]
+        ready = description["driver_ready"]
+        revision = description["driver_revision"]
         details = [
             f"Pinned release: {install_driver.URL}",
             f"Driver destination: {profile_target(home)}",

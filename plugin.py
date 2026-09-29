@@ -123,7 +123,7 @@ def register(ctx):
     ctx.register_command(
         "realm",
         command,
-        description="Private desktop: on [omarchy], off, status, review permissions, size, stop, repair, watch, shot, push, pull",
+        description="Private desktop: on [omarchy], off, status, review permissions (review unused: all earlier chats with no Realm use), size, stop, repair, watch, shot, push, pull",
     )
     ctx.register_hook("pre_tool_call", service.pre_tool)
     ctx.register_middleware("tool_execution", service.execution_middleware)

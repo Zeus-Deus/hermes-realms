@@ -67,6 +67,15 @@ In the existing conversation, choose **Use optional targets…**, or manually us
 native decision. Cancel leaves the hold in place. Do not label an old owner fresh
 or edit its ledger to clear the review.
 
+A conversation whose Realm you recovered here has recorded Realm use: a
+resource record, stored `realm` mode or chosen kind. The one-decision bulk
+review (enable-time setup, `/realm review unused` or `hermes realms review
+unused`) therefore leaves it held for this individual review. See
+[Safety](safety.md#one-decision-for-every-chat-with-no-recorded-realm-use).
+If its record is already gone and its row has no Realm state, the bulk review
+treats it like any other chat with no recorded use. Export before retiring
+applies either way.
+
 Acceptance does not export, adopt, start, stop or replay work. It preserves prior
 prompts and history. Continue with a **new explicit action** under the reviewed
 policy and normal tool approvals. Ordinary tools use the conversation's original

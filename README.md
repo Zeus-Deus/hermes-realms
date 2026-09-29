@@ -23,6 +23,7 @@ Manual controls, if you want them:
 | `/realm watch` | Open a view-only window onto the running Realm. |
 | `/realm status` | Show the kind, whether it is running, and setup state. |
 | `/realm repair` | Reset the agent's GUI-control connection to a running Realm. |
+| `/realm review` | Let an earlier chat run tools again after the upgrade (asks first). `/realm review unused` does this for every earlier chat that never used a Realm. |
 | `/realm push SOURCE [GUEST_PATH]` | Copy a file or folder into the Omarchy VM. |
 | `/realm pull GUEST_PATH LOCAL_PATH` | Copy a file or folder out of the Omarchy VM. |
 | **Delete workspace…** in the ⋯ menu | Permanently delete a stopped Realm's retained workspace (Desktop app). |
@@ -39,7 +40,7 @@ Linux x86-64 only. Enabling shows a setup review before anything is installed. I
 ## Known limitations
 
 - **Sub-agents** get their own separate Realm. It does not inherit the parent's `/realm off` or chosen kind, and it idles out (30 minutes by default) instead of stopping when the sub-agent finishes.
-- **Chats started before this upgrade:** sub-agents fail every tool with `legacy_permission_review_required` until you run `/realm review` once in that chat. New chats aren't affected.
+- **Chats started before this upgrade:** enabling the plugin lists how many earlier chats never used a Realm. Accepting the setup lets all of them run on your normal desktop again (the agent works outside the Realm, and a Realm is still available as a tool). This one decision covers all of them. Earlier chats that did use a Realm still need `/realm review` once in that chat; until then their tools fail with `legacy_permission_review_required`. If Realms was already enabled, run `/realm review unused` (or `hermes realms review unused`; add `--dry-run` to only count). New chats aren't affected.
 - **If Realms fails to load** (for example a missing Python dependency right after enabling), tools pause with `realms_load_failed` and the real error only in chats that use a Realm or still need `/realm review`; other chats keep working. `/realm status` shows the cause. Restart Hermes, or run `hermes pm repair` and restart.
 - **Physical screen lock:** not tested.
 

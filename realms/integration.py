@@ -50,6 +50,8 @@ class OwnershipStore:
                 if column not in {row[1] for row in db.execute("PRAGMA table_info(owners)")}:
                     # NULL is intentional: old writers must not mint new permissions.
                     db.execute(f"ALTER TABLE owners ADD COLUMN {column} TEXT")
+            # A user decision covering many owners (see bulk_review).
+            db.execute("CREATE TABLE IF NOT EXISTS review_decisions (scope TEXT PRIMARY KEY, receipt TEXT NOT NULL)")
         self.path.chmod(0o600)
 
     @contextmanager
@@ -143,12 +145,17 @@ class OwnershipStore:
             if len(owners) > 1:
                 raise OwnerError("Conflicting session owners")
             owner = next(iter(owners)) if owners else values["session_id"]
-            db.execute("INSERT OR IGNORE INTO owners(id,execution_contract) VALUES (?,?)",
-                       (owner, "optional-targets-v1" if session_origin == "fresh" else None))
+            fresh = session_origin == "fresh"
+            created = db.execute("INSERT OR IGNORE INTO owners(id,execution_contract) VALUES (?,?)",
+                                 (owner, "optional-targets-v1" if fresh else None)).rowcount
             db.executemany(
                 "INSERT OR IGNORE INTO aliases(kind,value,owner) VALUES (?,?,?)",
                 [(kind, value, owner) for kind, value in identifiers],
             )
+            if created and not fresh:
+                # An earlier chat first seen after the user's bulk decision.
+                from .bulk_review import adopt_on_bind
+                adopt_on_bind(db, self.root.parent, owner)
             return owner
 
     def resolve(self, *, allow_missing=False, **values):
@@ -589,7 +596,7 @@ class RealmIntegration:
         return {"url": viewer.origin + "/realms/" + realm_id + "/view#ticket=" + token}
 
     USAGE = (
-        "Use /realm on [omarchy]|off|status|review|size WIDTHxHEIGHT|stop|repair|watch|shot"
+        "Use /realm on [omarchy]|off|status|review [unused]|size WIDTHxHEIGHT|stop|repair|watch|shot"
         "|push SOURCE [DEST]|pull GUEST_PATH LOCAL_PATH"
     )
 
@@ -688,8 +695,14 @@ class RealmIntegration:
 
     def _command_review(self, owner, arguments, identity):
         from .permission_transition import review_manual
-        if arguments or identity.get("_agent"):
-            raise OwnerError("Permission conversion requires manual native review")
+        if identity.get("_agent") or arguments not in ([], ["unused"], ["--all-unused"]):
+            raise OwnerError("Permission conversion requires manual native review. "
+                             "Use /realm review, or /realm review unused for every earlier chat with no Realm use")
+        if arguments:
+            # Typing this command is the user's decision for every such chat.
+            from .bulk_review import release
+            with self._lock:
+                return release(self.home, provenance="slash-command")
         return review_manual(self, owner, identity)
 
     def _command_repair(self, owner, arguments, identity):

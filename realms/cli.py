@@ -24,6 +24,10 @@ def configure_parser(parser):
         command = commands.add_parser(name)
         command.add_argument("id")
         command.add_argument(argument)
+    review = commands.add_parser(
+        "review", help="Release every earlier chat with no recorded Realm use (one decision)")
+    review.add_argument("scope", choices=["unused"])
+    review.add_argument("--dry-run", action="store_true", help="Count only; change nothing")
     execute = commands.add_parser("exec")
     execute.add_argument("id")
     execute.add_argument("realm_command", metavar="command", nargs=argparse.REMAINDER)
@@ -158,6 +162,19 @@ def run(args):
             return 0
         if args.operation == "vm":
             return run_vm(args)
+        if args.operation == "review":
+            from .bulk_review import preview, release
+            from .config import effective_home
+            home = effective_home(args.home)
+            if args.dry_run:
+                scope = preview(home)
+                result = {"would_release": len(scope["eligible"]), "held": len(scope["kept"]),
+                          "decided": scope["decision"] is not None}
+            else:
+                # Running this command is the administrator's decision.
+                result = release(home, provenance="cli")
+            print(json.dumps(result, sort_keys=True))
+            return 0
         manager = Manager(args.home)
         if args.operation == "start":
             result = manager.start(args.session_id)

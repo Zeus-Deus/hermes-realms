@@ -63,6 +63,51 @@ stored `ask` in the acceptance transaction so the reviewed unselected state
 cannot change with a later profile default. Converted unset/ask target use
 stays unselected until explicitly enabled.
 
+### One decision for every chat with no recorded Realm use
+Most earlier conversations never used a Realm. Reviewing them one by one adds
+nothing, so the user can release all of them with **one explicit decision**.
+The rule stays the same: a user decision is still required, and missing metadata
+is still not taken as freshness. The decision can be made in any of these ways:
+
+- **Enable-time setup.** The consented plugin setup step lists `N earlier chats
+  with no Realm use will run on your normal desktop (agent outside the Realm;
+  Realm available as a tool). M chats that used a Realm keep asking for /realm
+  review.` Accepting that consent is the decision. The reviewed scope is part of
+  the setup revision. If the set of chats changes between review and run, the
+  setup refuses and the consent is requested again.
+- **`/realm review unused`** (also `--all-unused`), typed by the user. Typing the
+  command is the decision, so there is no further prompt. The agent's `realm`
+  tool cannot issue it.
+- **`hermes realms review unused`** from the profile's administrator. Use
+  `--dry-run` to count without changing anything.
+
+"No recorded Realm use" means the same criteria that decide which conversations
+a failed load pauses: no stored `realm` mode, no chosen or requested kind, no
+setup intent, and no `r-`/`v-` resource record naming the conversation. It also
+requires a recognized pre-contract permission (NULL or `legacy-held-v0`) and no
+attached old execution lease. Each released conversation gets the same ledger
+change as `/realm review`: contract `optional-targets-v1`, an unset mode stored
+as `ask`, an explicit choice (including Disable) preserved, and a receipt bound
+to this profile and owner. The receipt records the decision's scope
+(`no-recorded-realm-use`), its digest and its provenance (`setup-consent`,
+`slash-command` or `cli`). It is never labelled fresh. Conversations with
+recorded Realm use stay held for individual `/realm review`. The operation is
+idempotent.
+
+The decision is stored for this profile, so an earlier conversation Realms
+first sees afterwards gets the same treatment when it is bound, under the same
+criteria (receipt provenance `remembered-decision`). An example is a chat from
+before the plugin was installed that is reopened later. A store copied from
+another profile does not carry the decision.
+
+The host's setup contract has one yes/no consent per revision. Declining it
+leaves the plugin disabled, and a disabled plugin holds no conversation.
+Enabling while keeping every earlier chat held is therefore not offered at
+enable time. Accepting also installs the driver. The bulk release has no
+separate undo. With nothing left to decide, setup reports ready and asks
+nothing more. A profile that already had Realms enabled before this change is
+not asked again automatically; use `/realm review unused` there.
+
 This is permission conversion only: no prompt/history rewriting, mode reset,
 target startup, guest adoption, export, Stop or Delete. It does not establish
 data durability or authorize retirement of old compute. An attached old parent

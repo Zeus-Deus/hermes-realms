@@ -25,11 +25,36 @@ def _receipt_data(home, target, installer):
     }
 
 
+# Scope digest shown by describe in this module instance. The host's runner
+# calls describe and then run in the same instance, so run releases exactly
+# what the user reviewed and refuses a scope that changed in between.
+_REVIEWED = {}
+
+
+def _earlier_chats(hermes_home):
+    """(pending, revision part, detail lines) for the one-decision bulk review."""
+    review = _load("bulk_review").preview(hermes_home)
+    released, held = len(review["eligible"]), len(review["kept"])
+    pending = bool(released) or review["decision"] is None
+    _REVIEWED[str(hermes_home)] = review["digest"]
+    lines = [
+        f"{released} earlier chats with no Realm use will run on your normal desktop "
+        "(agent outside the Realm; Realm available as a tool).",
+        f"{held} chats that used a Realm keep asking for /realm review.",
+    ]
+    if review["decision"] is None:
+        lines.append("Older chats Realms has no record of yet are treated the same way when reopened. "
+                     "Nothing is started, stopped or deleted, and no tool is replayed.")
+    return pending, review["digest"] if pending else review["decision"]["digest"], lines
+
+
 def describe(hermes_home):
     if platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64"):
         return {
             "revision": "unsupported-platform",
             "ready": False,
+            "driver_revision": "unsupported-platform",
+            "driver_ready": False,
             "summary": "Realms setup requires Linux x86-64",
             "details": ["No verified Cua release is available for this host. Leave Realms disabled."],
         }
@@ -48,9 +73,15 @@ def describe(hermes_home):
             completed = json.loads(target.with_name(".realms-setup.json").read_text(encoding="utf-8")) == _receipt_data(hermes_home, target, installer)
         except (OSError, ValueError):
             completed = False
+    # One decision for every earlier chat with no recorded Realm use. The
+    # scope is part of the revision, so a changed count re-requests consent.
+    pending, scope, earlier = _earlier_chats(hermes_home)
     return {
-        "revision": _revision(installer),
-        "ready": completed,
+        "revision": _revision(installer) + ":" + scope,
+        "ready": completed and not pending,
+        # The in-app per-conversation setup only installs and checks the driver.
+        "driver_revision": _revision(installer),
+        "driver_ready": completed,
         "summary": f"Install and verify Cua driver {installer.VERSION} for Realms",
         "details": [
             installer.URL,
@@ -60,6 +91,7 @@ def describe(hermes_home):
             "Downloads the pinned release if needed, writes only this profile's driver, and executes --version to verify it.",
             "Does not install system packages, change the global Cua driver, start a desktop, or alter approvals.",
             status["message"],
+            *earlier,
         ],
     }
 
@@ -67,6 +99,12 @@ def describe(hermes_home):
 def run(hermes_home, *, progress=None):
     if platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64"):
         raise ValueError("Realms setup requires Linux x86-64; leave this plugin disabled on this host")
+    reviewed = _REVIEWED.get(str(hermes_home))
+    if reviewed is not None:
+        # Enable-time consent: the host described this setup in this module
+        # instance, and the consent covers exactly the chats listed there.
+        # The in-app driver setup runs without a description and releases nothing.
+        _load("bulk_review").release(hermes_home, provenance="setup-consent", expected=reviewed)
     installer = _load("install_driver")
     target = installer.profile_target(hermes_home)
     receipt = target.with_name(".realms-setup.json")

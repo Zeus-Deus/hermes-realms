@@ -133,7 +133,7 @@ def _install_vm(home, snapshot, generation, job_id=None, owner=None, *, release=
 def verify_ready(home, kind):
     """Reverify in the backend before it takes ownership of the new realm."""
     if kind == "realm":
-        if not setup_module()["describe"](home)["ready"]:
+        if not setup_module()["describe"](home)["driver_ready"]:
             raise ValueError("Driver verification incomplete")
         from .manager import Manager
         if not Manager(home).doctor()["ok"]:
