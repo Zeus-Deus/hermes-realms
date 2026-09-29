@@ -67,28 +67,38 @@ def _raw_command(args):
     return shlex.join([action, *(value for value in arguments if value)])
 
 
-def register(ctx):
-    cli = _load_runtime("cli")
-    configure_parser, run = cli.configure_parser, cli.run
-
-    ctx.register_cli_command(
-        "realms", "Manage private Linux desktops and explicitly install their driver",
-        configure_parser, run,
-    )
+def _register_degraded(ctx, exc):
+    """Registration exceptions otherwise unload the plugin and silently drop its
+    middleware, letting a conversation inside a Realm run on the host. Pause
+    only conversations recorded as using a Realm, and say why."""
     try:
-        service = get_integration(get_hermes_home())
+        degraded = _load_runtime("degraded").Degraded(get_hermes_home(), exc)
+        middleware, respond = degraded.middleware, degraded.respond
     except Exception:
-        # Registration exceptions otherwise unload the plugin and silently remove
-        # its permission middleware. Keep a concrete denial until storage can be
-        # recovered and this backend is explicitly reopened.
-        def unavailable(*args, **identity):
+        # Not even the store reader loads: nobody can be told apart.
+        def middleware(*args, **identity):
+            return respond()
+
+        def respond(*args, **identity):
             return json.dumps({
-                "error": "Realm permission storage is unavailable. Execution is paused; recover the original ownership store and reopen this backend. No guest was changed.",
+                "error": "Realm permission storage is unavailable. Execution is paused; recover the original ownership store and reopen this backend. No guest was changed. Realms could not load: " + (str(exc) or type(exc).__name__) + ".",
                 "error_code": "legacy_permission_review_required",
             })
-        ctx.register_middleware("tool_execution", unavailable)
-        ctx.register_tool("realm", "realms", SCHEMA, unavailable, check_fn=lambda: sys.platform == "linux")
-        ctx.register_command("realm", unavailable, description="Realm permission storage requires recovery")
+    ctx.register_middleware("tool_execution", middleware)
+    ctx.register_tool("realm", "realms", SCHEMA, respond, check_fn=lambda: sys.platform == "linux")
+    ctx.register_command("realm", respond, description="Realms could not load; /realm status shows why")
+
+
+def register(ctx):
+    try:
+        cli = _load_runtime("cli")
+        ctx.register_cli_command(
+            "realms", "Manage private Linux desktops and explicitly install their driver",
+            cli.configure_parser, cli.run,
+        )
+        service = get_integration(get_hermes_home())
+    except Exception as exc:
+        _register_degraded(ctx, exc)
         return
 
     def command(raw, **identity):

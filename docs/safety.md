@@ -74,6 +74,22 @@ and core-generated agent IDs. CLI `/resume` and `/branch` remain continuations;
 caller-supplied IDs without trusted lifecycle provenance remain conservative
 and may require review even when the caller intended a new session.
 
+## When Realms cannot load
+If the plugin is enabled but its runtime fails to import or start (for
+example a Python dependency missing from the running backend), it still
+registers its execution middleware so a conversation inside a Realm never
+silently runs on the host. The middleware reads the ownership store without
+writing it. Conversations it records as using a Realm (stored `realm` mode,
+kind, requested kind, setup intent, or a resource record), and earlier
+conversations still held for permission review, are paused with
+`realms_load_failed` and the underlying error; all other conversations run
+normally, as does a conversation the store has never seen (it cannot be in a
+Realm). A call without a conversation identity is paused while any
+conversation uses a Realm or is held. If the ownership store itself cannot be read, no
+conversation can be told apart and every tool is paused with
+`legacy_permission_review_required`, as before. The `realm` tool and `/realm`
+commands report the same error.
+
 For modern sessions, stop owned compute before disabling the runtime and restarting its backend. Disabling the UI alone changes no backend authority. Retained profile data and the explicitly installed driver are not implicitly deleted.
 
 ## Verification scope

@@ -10,6 +10,9 @@ class OwnerError(PermissionError):
     """The supplied identifiers do not name one registered conversation."""
 
 
+from .realm_state import permission_state  # noqa: E402  (stdlib-only; shared with degraded)
+
+
 class OwnershipStore:
     """Profile-local cross-process aliases, populated only by trusted host hooks."""
 
@@ -169,17 +172,7 @@ class OwnershipStore:
         if row is None:
             raise OwnerError("Unregistered permission owner")
         contract, mode, receipt = row
-        state = "optional" if contract == "optional-targets-v1" else (
-            "legacy-host" if contract is None and mode == "host" else "legacy-pending")
-        if receipt is not None:
-            import json
-            try:
-                accepted = json.loads(receipt)
-                if (accepted["home"] != str(self.root.parent) or accepted["owner"] != owner
-                        or accepted["contract"] != contract):
-                    state = "legacy-pending"
-            except (ValueError, KeyError, TypeError):
-                state = "legacy-pending"
+        state = permission_state(self.root.parent, owner, contract, mode, receipt)
         return {"state": state, "contract": contract, "stored_mode": mode, "receipt": receipt}
 
     def mode(self, owner, default):

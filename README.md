@@ -40,6 +40,7 @@ Linux x86-64 only. Enabling shows a setup review before anything is installed. I
 
 - **Sub-agents** get their own separate Realm. It does not inherit the parent's `/realm off` or chosen kind, and it idles out (30 minutes by default) instead of stopping when the sub-agent finishes.
 - **Chats started before this upgrade:** sub-agents fail every tool with `legacy_permission_review_required` until you run `/realm review` once in that chat. New chats aren't affected.
+- **If Realms fails to load** (for example a missing Python dependency right after enabling), tools pause with `realms_load_failed` and the real error only in chats that use a Realm or still need `/realm review`; other chats keep working. `/realm status` shows the cause. Restart Hermes, or run `hermes pm repair` and restart.
 - **Physical screen lock:** not tested.
 
 ## More
