@@ -71,7 +71,10 @@ def describe(hermes_home):
         try:
             installer.profile_target(hermes_home)
             completed = json.loads(target.with_name(".realms-setup.json").read_text(encoding="utf-8")) == _receipt_data(hermes_home, target, installer)
-        except (OSError, ValueError):
+        except (OSError, ValueError, ImportError):
+            # Hermes describes setup before installing the plugin's declared
+            # dependencies. Settings that cannot be read yet are not proof of a
+            # completed setup: run rewrites the receipt once they are present.
             completed = False
     # One decision for every earlier chat with no recorded Realm use. The
     # scope is part of the revision, so a changed count re-requests consent.

@@ -24,6 +24,8 @@ The two controls affect different layers:
 
 Agent-plugin enablement reviews the pinned Cua release, checksums and profile-local destination. **Set up and enable** authorizes that setup and its readiness checks. Cancelling before confirmation leaves enablement unchanged. Failed verification or missing prerequisites do not authorize fallback to the host display.
 
+Hermes shows this review before it installs the plugin's declared Python dependencies (PyYAML, FastAPI, Uvicorn, websockets), so the review imports none of them. If settings cannot be read yet, setup is reported as not done. Setup then runs after the dependencies are installed and rewrites its readiness record.
+
 After changing Python activation, restart the owning backend and start a new conversation rather than changing an existing conversation's cached tool schemas. Read [Legacy upgrade safety](safety.md#legacy-upgrade-safety) before restarting a backend with older active Realms.
 
 ## Coding and testing

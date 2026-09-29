@@ -14,11 +14,16 @@ pytestmark = pytest.mark.platforms("linux")
 
 
 class _NoYaml(importlib.abc.MetaPathFinder):
-    """Reproduce a backend whose environment lacks the plugin's PyYAML."""
+    """Reproduce a backend whose environment lacks a module the runtime needs.
+
+    Loading the runtime no longer imports any declared dependency, so the
+    failure is raised where the runtime's manager module would import one.
+    """
 
     def find_spec(self, name, path=None, target=None):
-        if name == "yaml" or name.startswith("yaml."):
-            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+        if name == "yaml" or name.startswith("yaml.") or (
+                name.startswith("_hermes_realms_") and name.endswith(".manager")):
+            raise ModuleNotFoundError("No module named 'yaml'", name="yaml")
         return None
 
 
@@ -49,6 +54,8 @@ def _realm_sessions(home):
 def _discover(monkeypatch):
     from hermes_cli.plugins import discover_plugins, get_plugin_manager
     monkeypatch.delitem(sys.modules, "yaml", raising=False)
+    for name in [m for m in sys.modules if m.startswith("_hermes_realms_") and m.endswith((".manager", ".cli"))]:
+        monkeypatch.delitem(sys.modules, name)
     monkeypatch.setattr(sys, "meta_path", [_NoYaml(), *sys.meta_path])
     discover_plugins(force=True)
     manager = get_plugin_manager()

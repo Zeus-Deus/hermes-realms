@@ -108,17 +108,19 @@ class Config:
 
     @classmethod
     def load(cls, home):
-        import yaml
         from dataclasses import fields
-        from hermes_cli.config import load_config_readonly
+        from hermes_cli import config as host_config
 
+        # Catch the error of the parser Hermes itself uses. Setup describe
+        # reads settings before the plugin's own dependencies are installed.
+        parse_error = host_config.yaml.YAMLError
         try:
-            data = load_config_readonly(home=Path(home))
+            data = host_config.load_config_readonly(home=Path(home))
             settings = data.get("plugins", {}).get("realms", {}) or {}
             return cls(
                 **{f.name: settings[f.name] for f in fields(cls) if f.name in settings}
             )
-        except (TypeError, AttributeError, yaml.YAMLError) as exc:
+        except (TypeError, AttributeError, parse_error) as exc:
             raise ValueError("invalid plugins.realms configuration") from exc
 
 
