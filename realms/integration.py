@@ -13,6 +13,17 @@ class OwnerError(PermissionError):
 from .realm_state import permission_state  # noqa: E402  (stdlib-only; shared with degraded)
 
 
+class _StoreLocks(dict):
+    """One re-entrant lock per ownership store file within this process."""
+
+    def __missing__(self, path):
+        import threading
+        return self.setdefault(path, threading.RLock())
+
+
+_store_locks = _StoreLocks()
+
+
 class OwnershipStore:
     """Profile-local cross-process aliases, populated only by trusted host hooks."""
 
@@ -52,6 +63,12 @@ class OwnershipStore:
                     db.execute(f"ALTER TABLE owners ADD COLUMN {column} TEXT")
             # A user decision covering many owners (see bulk_review).
             db.execute("CREATE TABLE IF NOT EXISTS review_decisions (scope TEXT PRIMARY KEY, receipt TEXT NOT NULL)")
+            # Delegated subagent sessions. They share the delegating session's
+            # owner, so their Realm ends with that session, not with them.
+            db.execute("CREATE TABLE IF NOT EXISTS delegated (session_id TEXT PRIMARY KEY, parent_owner TEXT NOT NULL)")
+            if "parent_owner" not in {row[1] for row in db.execute("PRAGMA table_info(owners)")}:
+                # Set only on a subagent's opt-in separate Realm.
+                db.execute("ALTER TABLE owners ADD COLUMN parent_owner TEXT")
         self.path.chmod(0o600)
 
     @contextmanager
@@ -85,21 +102,33 @@ class OwnershipStore:
                 raise OwnerError("Unregistered setup owner")
             return row[0]
 
+    def _snapshot(self):
+        """A private copy of the store, taken without writing it.
+
+        Parallel subagents bind (a short write) while their siblings' tools
+        read. The snapshot refuses a copy that meets a live journal or a
+        changed file, and must: a changed store is never adopted mid-read.
+        Same-process writers (sibling subagent threads) are therefore
+        serialized with the read instead, so they cannot cause that refusal.
+        """
+        from .setup_plan import confined
+        from .selection_store import read_snapshot
+        with _store_locks[self.path], read_snapshot(confined(self.root.parent, self.path)) as db:
+            yield db
+
     @contextmanager
     def connection(self, *, readonly=None):
         readonly = self.readonly if readonly is None else readonly
         if readonly:
-            from .setup_plan import confined
-            from .selection_store import read_snapshot
-            with read_snapshot(confined(self.root.parent, self.path)) as db:
-                yield db
+            yield from self._snapshot()
             return
-        db = sqlite3.connect(self.path, timeout=30)
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with _store_locks[self.path]:
+            db = sqlite3.connect(self.path, timeout=30)
+            try:
+                with db:
+                    yield db
+            finally:
+                db.close()
 
     @staticmethod
     def identifiers(values):
@@ -126,12 +155,28 @@ class OwnershipStore:
             raise OwnerError("An active conversation is required")
         return result
 
-    def bind(self, *, session_origin=None, **values):
+    def bind(self, *, session_origin=None, parent_session_id=None, **values):
+        """Bind trusted aliases to an owner.
+
+        A delegated subagent (``parent_session_id`` from the host's identity
+        snapshot) joins its delegating session's owner: same Realm, same
+        permission state, never more. An unknown parent is refused rather than
+        letting the subagent mint its own authority.
+        """
         identifiers = self.identifiers(values)
         if not values.get("session_id"):
             raise OwnerError("A trusted conversation identity is required")
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            parent_owner = None
+            if parent_session_id:
+                row = db.execute("SELECT owner FROM aliases WHERE kind='session_id' AND value=?",
+                                 (parent_session_id,)).fetchone()
+                if row is None:
+                    raise OwnerError("The delegating conversation is not registered with Realms")
+                parent_owner = row[0]
+                db.execute("INSERT OR IGNORE INTO delegated(session_id,parent_owner) VALUES (?,?)",
+                           (values["session_id"], parent_owner))
             owners = {
                 row[0]
                 for kind, value in identifiers
@@ -144,7 +189,7 @@ class OwnershipStore:
             }
             if len(owners) > 1:
                 raise OwnerError("Conflicting session owners")
-            owner = next(iter(owners)) if owners else values["session_id"]
+            owner = next(iter(owners)) if owners else (parent_owner or values["session_id"])
             fresh = session_origin == "fresh"
             created = db.execute("INSERT OR IGNORE INTO owners(id,execution_contract) VALUES (?,?)",
                                  (owner, "optional-targets-v1" if fresh else None)).rowcount
@@ -173,19 +218,65 @@ class OwnershipStore:
             raise OwnerError("Unregistered or conflicting session owners")
         return rows[0][0]
 
+    def delegated(self, session_id):
+        """The owner a subagent session was delegated from, else None."""
+        with self.connection(readonly=True) as db:
+            row = db.execute("SELECT parent_owner FROM delegated WHERE session_id=?", (session_id,)).fetchone()
+        return row[0] if row else None
+
+    def separate_owners(self, owner):
+        """Separate Realms that subagents of ``owner`` opted into."""
+        with self.connection(readonly=True) as db:
+            return [row[0] for row in db.execute("SELECT id FROM owners WHERE parent_owner=?", (owner,))]
+
+    def separate(self, parent_owner, **values):
+        """Move one subagent's aliases to its own owner, never above the parent.
+
+        The new owner copies the parent's routing mode and is optional-targets
+        only because the caller has already required that of the parent.
+        """
+        identifiers = self.identifiers(values)
+        owner = values["session_id"]
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT parent_owner FROM owners WHERE id=?", (owner,)).fetchone()
+            if row is not None and row[0] != parent_owner:
+                raise OwnerError("Conflicting session owners")
+            mode = db.execute("SELECT mode FROM owners WHERE id=?", (parent_owner,)).fetchone()
+            db.execute("INSERT OR IGNORE INTO owners(id,execution_contract,mode,parent_owner) VALUES (?,?,?,?)",
+                       (owner, "optional-targets-v1", mode[0] if mode else None, parent_owner))
+            db.executemany("UPDATE aliases SET owner=? WHERE kind=? AND value=? AND owner=?",
+                           [(owner, kind, value, parent_owner) for kind, value in identifiers])
+            db.executemany("INSERT OR IGNORE INTO aliases(kind,value,owner) VALUES (?,?,?)",
+                           [(kind, value, owner) for kind, value in identifiers])
+        return owner
+
     def permission(self, owner):
         with self.connection(readonly=True) as db:
-            row = db.execute("SELECT execution_contract,mode,permission_receipt FROM owners WHERE id=?", (owner,)).fetchone()
+            row = db.execute("SELECT execution_contract,mode,permission_receipt,parent_owner FROM owners WHERE id=?",
+                             (owner,)).fetchone()
         if row is None:
             raise OwnerError("Unregistered permission owner")
-        contract, mode, receipt = row
+        contract, mode, receipt, parent = row
         state = permission_state(self.root.parent, owner, contract, mode, receipt)
+        if parent is not None:
+            # A subagent's separate Realm follows its parent live: a later hold
+            # or /realm off on the parent applies to it too.
+            held = self.permission(parent)
+            if held["state"] != "optional":
+                state = held["state"]
+            if held["stored_mode"] == "host":
+                mode = "host"
         return {"state": state, "contract": contract, "stored_mode": mode, "receipt": receipt}
 
     def mode(self, owner, default):
         with self.connection(readonly=True) as db:
-            row = db.execute("SELECT mode FROM owners WHERE id=?", (owner,)).fetchone()
-        return row[0] or default if row else default
+            row = db.execute("SELECT o.mode,p.mode FROM owners o LEFT JOIN owners p ON p.id=o.parent_owner "
+                             "WHERE o.id=?", (owner,)).fetchone()
+        if row is None:
+            return default
+        # A parent turned off turns its subagents' separate Realms off too.
+        return "host" if row[1] == "host" else row[0] or default
 
     def kind(self, owner, default):
         with self.connection(readonly=True) as db:
@@ -378,6 +469,10 @@ class RealmIntegration:
 
         self.driver_executable = driver_path(self.home)
         self._attachments = {}
+        # Cold starts realized by a selection, so a subagent that selected the
+        # same not-yet-started session Realm can use it (target_contexts).
+        self._cold_starting = set()
+        self._cold_starts = {}
         self._target_contexts = {}
         self._target_disposers = []
         self._lock = threading.RLock()
@@ -490,7 +585,8 @@ class RealmIntegration:
         from .permission_transition import middleware
         return middleware(self, **kwargs)
 
-    def bind(self, *, hermes_home=None, profile=None, surface=None, session_origin=None, **identity):
+    def bind(self, *, hermes_home=None, profile=None, surface=None, session_origin=None,
+             parent_session_id=None, **identity):
         if hermes_home is not None and Path(hermes_home).resolve() != self.home:
             raise OwnerError("Profile ownership mismatch")
         if session_origin == "fresh":
@@ -499,6 +595,7 @@ class RealmIntegration:
                 session_origin = "resume"
         return self.owners.bind(
             session_origin=session_origin,
+            parent_session_id=parent_session_id,
             **{
                 key: identity.get(key)
                 for key in (
@@ -620,7 +717,11 @@ class RealmIntegration:
 
         The kind is a property of this conversation, so a later plain
         ``/realm on`` in the same chat keeps the kind that was chosen.
+        Subagents share this Realm; ``--separate`` gives one its own.
         """
+        if "--separate" in arguments:
+            owner = self._separate(owner, identity)
+            arguments = [a for a in arguments if a != "--separate"]
         with self._lock, self.owners.activation_guard(owner):
             # An explicit stored off differs from an unset profile default.
             from .permission_transition import require_optional
@@ -639,6 +740,24 @@ class RealmIntegration:
                 from .setup_continuation import record_request
                 record_request(self, owner, identity)
                 raise
+
+    def _separate(self, owner, identity):
+        """A subagent's opt-in clean Realm, with at most its parent's authority."""
+        from .permission_transition import require_optional
+        session_id = identity.get("session_id")
+        parent = self.owners.delegated(session_id) if session_id else None
+        if parent is None:
+            raise OwnerError("A separate Realm is only for a delegated subagent; this conversation's own Realm is its session Realm")
+        with self._lock, self.owners.activation_guard(parent):
+            require_optional(self, owner)
+            if identity.get("_agent") and self.owners.mode(owner, None) == "host":
+                raise OwnerError(
+                    "Realm use is disabled for this conversation. The user must "
+                    "re-enable it with /realm on or the desktop setup controls; "
+                    "ordinary tools remain available."
+                )
+            return self.owners.separate(parent, **{
+                key: identity.get(key) for key in ("session_id", "stored_session_id", "runtime_session_id", "task_id")})
 
     def _activate(self, owner, arguments, *, eager=False):
         from .config import Config, KINDS
@@ -685,6 +804,8 @@ class RealmIntegration:
             self.owners.set_mode(owner, "host")
             from .target_contexts import release_targets
             # Disable agent use, not the human's desktop or its workspace.
+            for separate in self.owners.separate_owners(owner):
+                release_targets(self, separate)
             release_targets(self, owner)
 
     def _command_stop(self, owner, arguments, identity):
@@ -931,6 +1052,7 @@ class RealmIntegration:
             records = self.manager.preflight_stop(owner)
             release_targets(self, owner)
             self._attachments.pop(owner, None)
+            self._cold_starts.pop(owner, None)
             for record in records:
                 from .bridge import get_profile_viewer
 
@@ -989,9 +1111,15 @@ class RealmIntegration:
                 "task_id",
             )
         }
+        if keys["session_id"] and self.owners.delegated(keys["session_id"]):
+            # A subagent finishing is not the session ending: the Realm, shared
+            # or separate, belongs to the delegating session.
+            return
         owner = self.owners.resolve(allow_missing=True, **keys)
         if owner is not None:
             with self._lock:
+                for separate in self.owners.separate_owners(owner):
+                    self.stop(separate)
                 self.stop(owner)
                 self._setup_request_sources.pop(owner, None)
 

@@ -15,11 +15,21 @@ HOLD = (
 DISCOVERY = frozenset({"clarify", "tool_search", "tool_describe", "skills_list", "skill_view"})
 
 
+UNBOUND = (
+    "Realms has no record of this conversation: its session start was not delivered "
+    "to the plugin. Execution is paused; no host or guest operation was started. "
+    "Start a new conversation or restart this backend."
+)
+
+
 def middleware(service, *, tool_name, args, next_call, session_id=None, task_id=None, **context):
     try:
         from hermes_constants import get_hermes_home
         if Path(get_hermes_home()).resolve() != service.home:
             raise OwnerError("Profile ownership mismatch")
+        if session_id and service.owners.resolve(allow_missing=True, session_id=session_id) is None:
+            # Denied exactly as before, but say why: not an earlier chat awaiting review.
+            return json.dumps({"error": UNBOUND, "error_code": "realms_session_unbound"})
         if session_id:
             service.owners.resolve(session_id=session_id)
             # Dispatch IDs are trusted metadata, not arguments. New turn task

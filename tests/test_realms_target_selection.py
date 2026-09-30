@@ -107,6 +107,24 @@ def test_selection_never_provisions_or_revives_stale_authority(selected_service,
         lease.check()
 
 
+def test_parallel_subagents_cold_selecting_the_session_realm_share_its_start(selected_service):
+    """Two subagents that both need the not-yet-started session Realm must end up in
+    the same one: the later one uses its sibling's start instead of refusing it as a
+    replacement. A record appearing any other way is still refused."""
+    from hermes_cli.session_execution import SessionExecutionError
+    service, owner, starts, record, persist, authority = selected_service
+    service.bind(session_origin="fresh", session_id="child", task_id="child-task", parent_session_id="parent")
+    first = service.select_terminal_target(command="printf a", session_id="parent", task_id="task")
+    second = service.select_terminal_target(command="printf b", session_id="child", task_id="child-task")
+    third = service.select_terminal_target(command="printf c", session_id="child", task_id="child-task")
+    lease = first.realize()
+    second.check()
+    assert second.realize() is lease
+    service.owners.setup_generation(owner, revoke=True)  # a stop between them
+    with pytest.raises(SessionExecutionError):
+        third.realize()
+
+
 @pytest.mark.parametrize("tool_name", ["computer_use", "terminal"])
 @pytest.mark.parametrize("approval", ["approved", "denied", "stop", "handback"])
 def test_registered_plugin_cold_use_requires_unchanged_consent(selected_service, monkeypatch, tool_name, approval):

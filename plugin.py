@@ -27,6 +27,10 @@ SCHEMA = {
                          "push", "pull"],
             },
             "size": {"type": "string", "description": "WIDTHxHEIGHT for action=size"},
+            "separate": {
+                "type": "boolean",
+                "description": "Subagents only, action=on: use a clean Realm of your own instead of the session's shared one. Only when the task needs an isolated system; it never grants more than the parent has.",
+            },
             "kind": {
                 "type": "string",
                 "enum": ["realm", "omarchy-vm"],
@@ -64,6 +68,8 @@ def _raw_command(args):
         "push": [args.get("path", ""), args.get("destination", "")],
         "pull": [args.get("path", ""), args.get("destination", "")],
     }.get(action, [])
+    if action == "on" and args.get("separate") is True:
+        arguments.append("--separate")
     return shlex.join([action, *(value for value in arguments if value)])
 
 
