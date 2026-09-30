@@ -10,10 +10,30 @@ import time
 from .lifecycle import alive, identity
 
 
+class _StoreLocks(dict):
+    """One re-entrant lock per authority store within this process.
+
+    Parallel subagents in one backend create and write this store while their
+    siblings read it. The read refuses a store that is mid-write (and must), so
+    same-process writers and readers are serialized instead.
+    """
+
+    def __missing__(self, path):
+        import threading
+        return self.setdefault(path, threading.RLock())
+
+
+_store_locks = _StoreLocks()
+
+
 class ControlAuthority:
     TTL = 3.0
 
     def __init__(self, directory):
+        with _store_locks[str(Path(directory).absolute())]:
+            self._create(directory)
+
+    def _create(self, directory):
         self.directory = Path(directory)
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = self.directory.lstat()
@@ -45,12 +65,13 @@ class ControlAuthority:
             or stat.S_IMODE(info.st_mode) != 0o600
         ):
             raise ValueError("Viewer authority ownership changed")
-        db = sqlite3.connect(self.path, timeout=3)
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with _store_locks[str(self.directory.absolute())]:
+            db = sqlite3.connect(self.path, timeout=3)
+            try:
+                with db:
+                    yield db
+            finally:
+                db.close()
 
     @classmethod
     def read_agent_epoch(cls, directory, realm):
@@ -68,7 +89,7 @@ class ControlAuthority:
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:  # windows-footgun: ok — runtime package rejects non-Linux hosts
             raise ValueError("Viewer state must be a private owned directory")
         from .selection_store import read_snapshot
-        with read_snapshot(path, mode=0o600) as db:
+        with _store_locks[str(directory.absolute())], read_snapshot(path, mode=0o600) as db:
             db.execute("BEGIN")
             if "established" not in {row[1] for row in db.execute("PRAGMA table_info(leases)")}:
                 raise ValueError("Viewer authority requires an explicit upgrade")

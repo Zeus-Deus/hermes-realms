@@ -13,6 +13,17 @@ class OwnerError(PermissionError):
 from .realm_state import permission_state  # noqa: E402  (stdlib-only; shared with degraded)
 
 
+class _StoreLocks(dict):
+    """One re-entrant lock per ownership store file within this process."""
+
+    def __missing__(self, path):
+        import threading
+        return self.setdefault(path, threading.RLock())
+
+
+_store_locks = _StoreLocks()
+
+
 class OwnershipStore:
     """Profile-local cross-process aliases, populated only by trusted host hooks."""
 
@@ -91,21 +102,33 @@ class OwnershipStore:
                 raise OwnerError("Unregistered setup owner")
             return row[0]
 
+    def _snapshot(self):
+        """A private copy of the store, taken without writing it.
+
+        Parallel subagents bind (a short write) while their siblings' tools
+        read. The snapshot refuses a copy that meets a live journal or a
+        changed file, and must: a changed store is never adopted mid-read.
+        Same-process writers (sibling subagent threads) are therefore
+        serialized with the read instead, so they cannot cause that refusal.
+        """
+        from .setup_plan import confined
+        from .selection_store import read_snapshot
+        with _store_locks[self.path], read_snapshot(confined(self.root.parent, self.path)) as db:
+            yield db
+
     @contextmanager
     def connection(self, *, readonly=None):
         readonly = self.readonly if readonly is None else readonly
         if readonly:
-            from .setup_plan import confined
-            from .selection_store import read_snapshot
-            with read_snapshot(confined(self.root.parent, self.path)) as db:
-                yield db
+            yield from self._snapshot()
             return
-        db = sqlite3.connect(self.path, timeout=30)
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with _store_locks[self.path]:
+            db = sqlite3.connect(self.path, timeout=30)
+            try:
+                with db:
+                    yield db
+            finally:
+                db.close()
 
     @staticmethod
     def identifiers(values):
@@ -433,6 +456,10 @@ class RealmIntegration:
 
         self.driver_executable = driver_path(self.home)
         self._attachments = {}
+        # Cold starts realized by a selection, so a subagent that selected the
+        # same not-yet-started session Realm can use it (target_contexts).
+        self._cold_starting = set()
+        self._cold_starts = {}
         self._target_contexts = {}
         self._target_disposers = []
         self._lock = threading.RLock()
@@ -1010,6 +1037,7 @@ class RealmIntegration:
             records = self.manager.preflight_stop(owner)
             release_targets(self, owner)
             self._attachments.pop(owner, None)
+            self._cold_starts.pop(owner, None)
             for record in records:
                 from .bridge import get_profile_viewer
 

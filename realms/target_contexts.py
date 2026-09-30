@@ -211,9 +211,29 @@ def select_for(service, purpose, *, session_id, task_id=None, command=None):
     epoch = _access_epoch(service, owner, record["id"]) if record is not None else None
     realized = None
     preparing = None
+    realizing = False
+
+    def adopt_sibling_start():
+        """Subagents share one session Realm, so two can select it cold at once.
+
+        The later one may use the start its sibling realized through this
+        integration for the same owner, kind and setup generation, waiting out
+        one still in flight. Any other record appearing is still a replacement.
+        """
+        nonlocal binding, epoch
+        if binding is not None or realizing:
+            return
+        if owner not in service._cold_starting and _selected_record(service, owner, kind) is None:
+            return
+        with service._lock:
+            started = service._cold_starts.get(owner)
+            if (started is not None and started[:2] == (generation, kind)
+                    and _record_binding(_selected_record(service, owner, kind)) == started[2]):
+                binding, epoch = started[2], started[3]
 
     def check():
         check_owner()
+        adopt_sibling_start()
         if binding is None:
             try:
                 if ControlAuthority.read_agent_epoch(service.home / "realms" / "viewer", "") != cold_authority:
@@ -227,6 +247,23 @@ def select_for(service, purpose, *, session_id, task_id=None, command=None):
             raise SessionExecutionError("Selected Realm control changed; request a fresh operation")
 
     def realize(*, before_start=None):
+        nonlocal realizing
+        with service._lock:
+            cold = binding is None
+            if cold:
+                service._cold_starting.add(owner)
+            realizing = True
+            try:
+                lease = _realize(before_start=before_start)
+            finally:
+                realizing = False
+                if cold:
+                    service._cold_starting.discard(owner)
+            if cold and record is None:
+                service._cold_starts[owner] = (generation, kind, binding, epoch)
+            return lease
+
+    def _realize(*, before_start=None):
         nonlocal binding, epoch, realized, cold_authority
         def admit(*, prepared=None):
             nonlocal preparing

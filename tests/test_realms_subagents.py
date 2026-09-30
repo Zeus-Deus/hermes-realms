@@ -60,6 +60,39 @@ def test_concurrent_subagents_join_the_parents_realm_owner(service):
         assert [row["id"] for row in resources] == [record["id"]]
 
 
+def test_reads_during_sibling_writes_are_not_mistaken_for_a_permission_hold(service):
+    """Parallel subagents bind (write) while their siblings' tools read the owner store.
+    A read that meets a sibling's in-flight write must retry, not report a legacy hold."""
+    service.bind(session_origin="fresh", session_id="parent")
+    for index in range(4):
+        service.bind(session_origin="fresh", session_id=f"child-{index}", parent_session_id="parent")
+    stop = threading.Event()
+    denied = []
+
+    def writer():
+        index = 0
+        while not stop.is_set():
+            index += 1
+            service.bind(session_origin="fresh", session_id=f"late-{index}", parent_session_id="parent")
+
+    def reader(index):
+        for turn in range(150):
+            result, _ = _middleware(service, session_id=f"child-{index}", task_id=f"child-task-{index}-{turn}")
+            if result != "ran":
+                denied.append(result)
+
+    writers = [threading.Thread(target=writer) for _ in range(2)]
+    readers = [threading.Thread(target=reader, args=(i,)) for i in range(4)]
+    for thread in writers + readers:
+        thread.start()
+    for thread in readers:
+        thread.join()
+    stop.set()
+    for thread in writers:
+        thread.join()
+    assert denied == []
+
+
 def test_subagent_never_gets_more_than_its_parent(service):
     held = service.bind(session_id="old-parent")  # not fresh: legacy permissions pending
     assert service.owners.permission(held)["state"] == "legacy-pending"
