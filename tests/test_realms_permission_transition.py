@@ -95,8 +95,10 @@ def test_registered_dispatch_holds_legacy_despite_early_approve_and_failures(reg
     result = json.loads(model_tools.handle_function_call("realm", {"action": "status"}, session_id="private"))
     assert result["permission"]["state"] == "legacy-pending"
     assert service._vm is None and service._attachments == {}
-    for identity in ({}, {"session_id": "missing"}, {"session_id": "private", "task_id": "unbound"}):
+    for identity in ({}, {"session_id": "private", "task_id": "unbound"}):
         assert json.loads(model_tools.handle_function_call("permission_probe", {}, **identity))["error_code"] == "legacy_permission_review_required"
+    # A session Realms never heard of is still held, but named honestly.
+    assert json.loads(model_tools.handle_function_call("permission_probe", {}, session_id="missing"))["error_code"] == "realms_session_unbound"
     monkeypatch.setattr(service.owners, "permission", lambda *a: (_ for _ in ()).throw(sqlite3.OperationalError("broken")))
     assert json.loads(model_tools.handle_function_call("permission_probe", {}, session_id="off"))["error_code"] == "legacy_permission_review_required"
     assert len(effects) == 2

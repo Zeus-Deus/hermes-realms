@@ -51,6 +51,15 @@ never borrow another session's display, VM or credentials.
 7. Continue normal editing or GitHub work with ordinary tools, without `off`,
    guest login, credential forwarding or a separate publishing engine.
 
+## Subagents
+
+A delegated subagent shares its session's Realm: the same desktop, the same
+permissions, never more. Work that needs no desktop stays on the host. Use
+`realm(action="on", separate=true)` only when the task needs a clean isolated
+system of its own. The Realm belongs to the session, so finishing a subagent
+does not stop it. Parallel subagents in one Realm share its screen; the parent
+coordinates who drives it.
+
 ## Failure and human control
 
 A failed target must not block ordinary work. Use status and explicit target
