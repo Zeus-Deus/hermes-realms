@@ -253,17 +253,30 @@ class OwnershipStore:
 
     def permission(self, owner):
         with self.connection(readonly=True) as db:
-            row = db.execute("SELECT execution_contract,mode,permission_receipt FROM owners WHERE id=?", (owner,)).fetchone()
+            row = db.execute("SELECT execution_contract,mode,permission_receipt,parent_owner FROM owners WHERE id=?",
+                             (owner,)).fetchone()
         if row is None:
             raise OwnerError("Unregistered permission owner")
-        contract, mode, receipt = row
+        contract, mode, receipt, parent = row
         state = permission_state(self.root.parent, owner, contract, mode, receipt)
+        if parent is not None:
+            # A subagent's separate Realm follows its parent live: a later hold
+            # or /realm off on the parent applies to it too.
+            held = self.permission(parent)
+            if held["state"] != "optional":
+                state = held["state"]
+            if held["stored_mode"] == "host":
+                mode = "host"
         return {"state": state, "contract": contract, "stored_mode": mode, "receipt": receipt}
 
     def mode(self, owner, default):
         with self.connection(readonly=True) as db:
-            row = db.execute("SELECT mode FROM owners WHERE id=?", (owner,)).fetchone()
-        return row[0] or default if row else default
+            row = db.execute("SELECT o.mode,p.mode FROM owners o LEFT JOIN owners p ON p.id=o.parent_owner "
+                             "WHERE o.id=?", (owner,)).fetchone()
+        if row is None:
+            return default
+        # A parent turned off turns its subagents' separate Realms off too.
+        return "host" if row[1] == "host" else row[0] or default
 
     def kind(self, owner, default):
         with self.connection(readonly=True) as db:
@@ -791,6 +804,8 @@ class RealmIntegration:
             self.owners.set_mode(owner, "host")
             from .target_contexts import release_targets
             # Disable agent use, not the human's desktop or its workspace.
+            for separate in self.owners.separate_owners(owner):
+                release_targets(self, separate)
             release_targets(self, owner)
 
     def _command_stop(self, owner, arguments, identity):

@@ -62,7 +62,7 @@ def test_concurrent_subagents_join_the_parents_realm_owner(service):
 
 def test_reads_during_sibling_writes_are_not_mistaken_for_a_permission_hold(service):
     """Parallel subagents bind (write) while their siblings' tools read the owner store.
-    A read that meets a sibling's in-flight write must retry, not report a legacy hold."""
+    A read waits for a sibling's in-flight write to finish instead of reporting a legacy hold."""
     service.bind(session_origin="fresh", session_id="parent")
     for index in range(4):
         service.bind(session_origin="fresh", session_id=f"child-{index}", parent_session_id="parent")
@@ -158,3 +158,31 @@ def test_separate_realm_is_opt_in_and_still_ends_with_the_session(service, monke
     assert stopped == []
     service.finalize(session_id="parent")
     assert sorted(stopped) == sorted([parent, separate])
+
+
+def test_separate_realm_follows_the_parent_being_turned_off(service, monkeypatch):
+    parent = service.bind(session_origin="fresh", session_id="parent")
+    service.bind(session_origin="fresh", session_id="child", parent_session_id="parent")
+    monkeypatch.setattr(service, "_activate", lambda owner, arguments, **kw: service.owners.set_mode(owner, "realm"))
+    service.command("on --separate", session_id="child", task_id="child-task", _agent=True)
+    separate = service.owners.resolve(session_id="child", task_id="child-task")
+    assert separate != parent and service.owners.mode(separate, None) == "realm"
+
+    service.command("off", session_id="parent")
+    assert service.owners.mode(separate, None) == "host"
+    with pytest.raises(PermissionError, match="disabled"):
+        service.command("on", session_id="child", task_id="child-task", _agent=True)
+    with pytest.raises(Exception, match="disabled"):
+        service.select_computer_use_target(session_id="child", task_id="child-task")
+
+
+def test_separate_realm_follows_a_parent_permission_hold(service):
+    parent = service.bind(session_origin="fresh", session_id="parent")
+    service.bind(session_origin="fresh", session_id="child", parent_session_id="parent")
+    separate = service._separate(parent, {"session_id": "child", "task_id": "child-task"})
+    with service.owners.connection() as db:
+        db.execute("UPDATE owners SET execution_contract=NULL WHERE id=?", (parent,))
+    assert service.owners.permission(parent)["state"] == "legacy-pending"
+    assert service.owners.permission(separate)["state"] == "legacy-pending"
+    result, calls = _middleware(service, session_id="child", task_id="child-task")
+    assert calls == [] and json.loads(result)["error_code"] == "legacy_permission_review_required"
