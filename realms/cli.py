@@ -1,4 +1,7 @@
-"""Standalone profile-aware realm CLI. Machine-readable JSON by default."""
+"""Standalone profile-aware realm CLI. Machine-readable JSON by default.
+
+``list`` prints a table only when stdout is a terminal; pipes keep the JSON.
+"""
 
 import argparse
 import hashlib
@@ -15,7 +18,8 @@ def configure_parser(parser):
     )
     commands = parser.add_subparsers(dest="operation", required=True)
     commands.add_parser("start").add_argument("session_id")
-    commands.add_parser("list")
+    add_list_parser(commands, "Realms in this profile (table on a terminal, JSON when piped)")
+    add_view_parser(commands)
     configure_delete_parser(commands)
     for name in ("stop", "env"):
         commands.add_parser(name).add_argument("id")
@@ -51,12 +55,34 @@ def configure_vm_parser(parser):
         "--check-updates", action="store_true",
         help="Also ask GitHub for the newest Omarchy release (needs network)")
     operations.add_parser("doctor", help="Check Omarchy VM prerequisites")
-    operations.add_parser("list", help="Running VM realms in this profile")
+    add_list_parser(operations, "VM realms in this profile (table on a terminal, JSON when piped)")
+    add_view_parser(operations)
     operations.add_parser(
         "remove-base", help="Delete this profile's base image (not the ISO)")
     operations.add_parser("clean", help="Remove stale ISOs; preserve all workspace data")
     operations.add_parser("stop").add_argument("id")
     configure_delete_parser(operations)
+
+
+def add_list_parser(commands, help_text):
+    command = commands.add_parser("list", help=help_text)
+    output = command.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true",
+                        help="Raw JSON records (the default when stdout is not a terminal)")
+    output.add_argument("--table", action="store_true",
+                        help="Readable table even when stdout is not a terminal")
+
+
+def add_view_parser(commands):
+    command = commands.add_parser(
+        "view", help="Print a private link to a running realm's live screen (view-only)")
+    command.add_argument("id", nargs="?", help="Realm or VM ID (default: the only running one)")
+    command.add_argument("--control", action="store_true",
+                         help="Allow taking over input from the page (pauses the agent while held)")
+    command.add_argument("--tailnet", action="store_true",
+                         help="Listen on this machine's Tailscale IP instead of 127.0.0.1")
+    command.add_argument("--port", type=int, default=0,
+                         help="Fixed listen port (default: any free port)")
 
 
 def configure_delete_parser(commands):
@@ -113,7 +139,11 @@ def run_vm(args):
         print(json.dumps(report, sort_keys=True))
         return 0 if report["ok"] else 1
     elif args.vm_operation == "list":
-        result = manager.list()
+        from .terminal import print_records
+        print_records(manager.list(), args)
+        return 0
+    elif args.vm_operation == "view":
+        return view(args, kind="vm")
     elif args.vm_operation == "remove-base":
         result = {"removed": manager.remove_base()}
     elif args.vm_operation == "delete":
@@ -154,6 +184,12 @@ def clean(manager):
         _release(lock)
 
 
+def view(args, kind=None):
+    from .terminal import view as serve
+    return serve(args.home, args.id, control=args.control, tailnet=args.tailnet,
+                 port=args.port, kind=kind)
+
+
 def run(args):
     try:
         if args.operation == "install-driver":
@@ -175,11 +211,15 @@ def run(args):
                 result = release(home, provenance="cli")
             print(json.dumps(result, sort_keys=True))
             return 0
+        if args.operation == "view":
+            return view(args)
         manager = Manager(args.home)
         if args.operation == "start":
             result = manager.start(args.session_id)
         elif args.operation == "list":
-            result = manager.list()
+            from .terminal import print_records
+            print_records(manager.list(), args)
+            return 0
         elif args.operation == "delete":
             result = confirmed_delete(manager, args)
         elif args.operation == "stop":

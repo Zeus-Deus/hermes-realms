@@ -38,7 +38,9 @@ private sibling checkouts, or archived execution evidence.
   teardown, crashes, idle expiry and concurrent startup. Never modify global
   systemd activation environment. Inhibit sleep only, never idle or locking.
 - Raw VNC uses only a mode-0600 Unix socket under the mode-0700 realm runtime.
-  The viewer binds loopback only. Verify HTTP/WebSocket capabilities independently;
+  The viewer binds loopback only; the sole exception is the explicit terminal
+  `realms view --tailnet`, which binds this host's own Tailscale (100.64.0.0/10)
+  address. Never bind wildcard or LAN addresses. Verify HTTP/WebSocket capabilities independently;
   enforce view-only server-side and scoped, revocable takeover. Revalidate peers
   and input authority. Do not accept arbitrary target hosts or ports.
 - Production profiles, live desktop configuration and unrelated dirty worktrees

@@ -26,6 +26,8 @@ Manual controls, if you want them:
 | `/realm review` | Let an earlier chat run tools again after the upgrade (asks first). `/realm review unused` does this for every earlier chat that never used a Realm. |
 | `/realm push SOURCE [GUEST_PATH]` | Copy a file or folder into the Omarchy VM. |
 | `/realm pull GUEST_PATH LOCAL_PATH` | Copy a file or folder out of the Omarchy VM. |
+| `hermes realms list` / `hermes realms vm list` | Table of Realms in this profile, running first (`--json` for scripts). |
+| `hermes realms view [ID]` | Print a private link to a running Realm's or VM's live screen, view-only. Works over SSH (it prints the `ssh -L` command) or `--tailnet`. See [From a terminal](docs/user-guide.md#from-a-terminal). |
 | **Delete workspace…** in the ⋯ menu | Permanently delete a stopped Realm's retained workspace (Desktop app). |
 
 ## Install

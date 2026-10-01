@@ -5,7 +5,11 @@ const state = document.querySelector('#state');
 const button = document.querySelector('#control');
 const error = document.querySelector('#error');
 const realm = location.pathname.split('/')[2];
-const token = new URLSearchParams(location.hash.slice(1)).get('ticket');
+const fragment = new URLSearchParams(location.hash.slice(1));
+const token = fragment.get('ticket');
+// A view-only terminal link has no takeover capability; don't offer one.
+const viewOnly = fragment.get('view') === '1';
+if (viewOnly) button.hidden = true;
 // Capabilities never remain in history, requests, Referer, or browser storage.
 history.replaceState(null, '', location.pathname);
 let connection;
