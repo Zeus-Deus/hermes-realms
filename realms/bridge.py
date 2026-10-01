@@ -129,17 +129,34 @@ class ViewerServer:
             )
             return response
 
-    def start(self):
+    def start(self, *, host="127.0.0.1", port=0):
+        """Listen on loopback, or on this machine's own tailnet address.
+
+        Only the terminal ``realms view --tailnet`` passes a host. Wildcard and
+        LAN binds are refused outright: the ticket is the only HTTP credential,
+        so exposure is limited to loopback (SSH tunnels) or the WireGuard-
+        encrypted, device-authenticated tailnet.
+        """
+        import ipaddress
+
+        address = ipaddress.ip_address(host)
+        if not (address.is_loopback or address in ipaddress.ip_network("100.64.0.0/10")):
+            raise ValueError("Viewer binds loopback or a Tailscale address only")
+        if type(port) is not int or not (port == 0 or 1024 <= port <= 65535):
+            raise ValueError("Viewer port must be 0 (any) or 1024-65535")
         with self._lock:
             if self._thread is not None:
                 return self
             listener = socket.socket()
-            listener.bind(("127.0.0.1", 0))
+            if port:
+                # A fixed --port must be reusable right after a previous run.
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((str(address), port))
             listener.listen(64)
-            self.origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
+            self.origin = f"http://{address}:{listener.getsockname()[1]}"
             config = uvicorn.Config(
                 self.app,
-                host="127.0.0.1",
+                host=str(address),
                 log_level="error",
                 access_log=False,
                 ws="websockets-sansio",

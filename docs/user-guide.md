@@ -66,6 +66,25 @@ hermes realms vm delete ID --session-id OWNER
 
 Get the exact ID and `session_id` from the corresponding `list` command in the intended profile. Delete requires an interactive terminal and exact typed confirmation. It refuses running, foreign or changed targets, including a restart during confirmation. It never automatically stops compute, removes another workspace, or deletes shared VM base data. Cancelled/noninteractive confirmation deletes nothing; interrupted deletion needs a fresh review. Owner selection is administrative, not authenticated session identity. Native session Delete UI remains unqualified; there is no model-tool Delete or `/realm delete` slash command.
 
+## From a terminal
+
+```sh
+hermes realms list            # regular Realms: table on a terminal
+hermes realms vm list         # Omarchy VMs
+hermes realms vm list --json  # raw records (also what a pipe or script gets)
+hermes realms view [ID]       # live screen of a running Realm or VM
+hermes realms vm view [ID]
+```
+
+`list` prints one row per Realm, running first: ID, kind, state (`running`, `stopped`, `needs recovery`, …), screen size or VM memory, owning session, age and last activity, then the reasons behind any `needs recovery` rows. When stdout is not a terminal (a pipe, a script, an agent tool), `list` prints the same JSON as before; `--json` and `--table` force either form.
+
+`view` prints a header for the Realm and a clickable link (an OSC 8 hyperlink where the terminal supports it) to a live, view-only browser view. It uses the same viewer as Watch in the Desktop app. The server, not the page, drops all input. Without an ID it picks the only running Realm. It runs until Ctrl-C, until the Realm stops or restarts, or until the terminal or SSH session goes away. The link works only while the command runs. `--control` lets the page take over input. That pauses the agent just like Take over in Watch, so hand back from the page before closing it.
+
+The link carries a random, single-realm ticket after `#`, so the ticket is never sent in a request, a log or a Referer. The listener binds `127.0.0.1` only, never `0.0.0.0` or the LAN. Over SSH:
+
+- **Default:** `view` sees `$SSH_CONNECTION` and prints the exact tunnel command, for example `ssh -N -L 40123:127.0.0.1:40123 you@host`. Run that on the device you connected from, then open the link there. Nothing is exposed beyond what your SSH login already grants.
+- **Tailscale:** `view --tailnet` binds this machine's own Tailscale address (`100.64.0.0/10` only) instead, so the link opens directly on your other tailnet devices. Traffic is WireGuard-encrypted, and only your tailnet can reach the port. The ticket is still required. `--port N` fixes the port if your tailnet ACLs need one.
+
 The legacy `default_mode` values now describe target availability, not the parent's execution environment. Explicit target failure never permits host-display fallback or bypassing human control, and existing approvals continue to apply.
 
 ## Legacy upgrade warning

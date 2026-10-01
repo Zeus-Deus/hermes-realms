@@ -18,7 +18,7 @@ vi.mock('../../realms/web/vendor/novnc/core/rfb.js', () => ({
   }
 }))
 
-async function openViewer() {
+async function openViewer(fragment = '') {
   vi.useFakeTimers()
   vi.resetModules()
   vi.stubGlobal(
@@ -35,7 +35,7 @@ async function openViewer() {
   )
   document.body.innerHTML =
     '<div id="screen"></div><span id="state"></span><button id="control"></button><div id="error" hidden></div>'
-  history.replaceState(null, '', '/realms/fixture/view#ticket=' + 'a'.repeat(43))
+  history.replaceState(null, '', '/realms/fixture/view#ticket=' + 'a'.repeat(43) + fragment)
   // @ts-expect-error The bundled viewer is a plain JavaScript module.
   await import('../../realms/web/viewer.js')
 }
@@ -101,4 +101,13 @@ it.each([false, true])('does not retry explicit policy closure regardless of RFB
   expect(clients).toHaveLength(1)
   expect(document.querySelector('#state')!.textContent).toBe('Disconnected')
   expect(document.querySelector('#error')!.textContent).toContain('Watch')
+})
+
+it('a terminal view-only link offers no takeover and still strips its capability', async () => {
+  await openViewer('&view=1')
+  expect(location.hash).toBe('')
+  clients[0].dispatchEvent(new Event('connect'))
+  expect(document.querySelector<HTMLButtonElement>('#control')!.hidden).toBe(true)
+  expect(clients[0].viewOnly).toBe(true)
+  expect(document.querySelector('#state')!.textContent).toBe('Live · view only')
 })
