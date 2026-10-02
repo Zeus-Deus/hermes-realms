@@ -821,6 +821,21 @@ async function openRealmViewer(ctx, session, realm, target, isCurrent = () => tr
   if (session.connectionId !== LOCAL_CONNECTION_ID) throw new Error(REMOTE_VIEWER_UNSUPPORTED);
   const scope = Object.freeze({ ...session });
   const path = `/realms/${encodeURIComponent(realm.id)}`;
+  const label = `${kindName(realm.kind)} · ${scope.profile}`;
+  let id;
+  const show = async (current) => {
+    const { url, onKeepAlive } = await mintViewer(ctx, path, scope, isEnabled);
+    id ??= await viewerId(scope, realm.id);
+    if (!current()) throw new Error("Realm owner changed before viewer opened");
+    return target === "watch" ? host.openPreview?.({ url, label, session: scope, onKeepAlive, onReopen }) : ctx.os?.openViewer?.({ id, url, title: label.slice(0, 120), session: scope, onKeepAlive });
+  };
+  const onReopen = async () => {
+    if (!isEnabled()) throw new Error("Viewer plugin is disabled");
+    if (!await show(() => true)) throw new Error("Viewer unavailable or session owner is stale");
+  };
+  if (!await show(isCurrent)) throw new Error("Viewer unavailable or session owner is stale");
+}
+async function mintViewer(ctx, path, scope, isEnabled) {
   const reply = await ctx.rest(`${path}/watch`, { method: "POST", body: ownerBody3(scope), scope });
   let url;
   try {
@@ -840,11 +855,7 @@ async function openRealmViewer(ctx, session, realm, target, isCurrent = () => tr
     });
     if (result?.renewed !== true) throw new Error("Viewer authorization could not be renewed");
   };
-  const id = await viewerId(scope, realm.id);
-  if (!isCurrent()) throw new Error("Realm owner changed before viewer opened");
-  const label = `${kindName(realm.kind)} · ${scope.profile}`;
-  const opened = target === "watch" ? await host.openPreview?.({ url: reply.url, label, session: scope, onKeepAlive }) : await ctx.os?.openViewer?.({ id, url: reply.url, title: label.slice(0, 120), session: scope, onKeepAlive });
-  if (!opened) throw new Error("Viewer unavailable or session owner is stale");
+  return { url: reply.url, onKeepAlive };
 }
 var plugin_source_default = {
   id: "hermes-realms",
