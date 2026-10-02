@@ -68,9 +68,11 @@ A stopped VM shown as `needs recovery` can't be resumed or deleted this way beca
 
 ```sh
 hermes realms vm delete ID --session-id OWNER --discard
-hermes realms vm prune --all --dry-run   # list what would go and what is kept
-hermes realms vm prune --all             # then confirm the same list once
+hermes realms vm prune --all --recovery-only --dry-run   # list what would go and what is kept
+hermes realms vm prune --all --recovery-only             # then confirm the same list once
 ```
+
+Run `hermes realms vm list` first: it returns workspaces that verify again to `stopped`. `--recovery-only` keeps every healthy stopped workspace; leave it out only if you also want those gone.
 
 See [safety](safety.md#vm-workspaces-that-need-recovery) for exactly what is checked.
 

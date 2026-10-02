@@ -72,14 +72,29 @@ def configure_vm_parser(parser):
     selection = prune.add_mutually_exclusive_group(required=True)
     selection.add_argument("--all", action="store_true", dest="everything",
                            help="Every VM workspace whose compute is provably stopped")
-    selection.add_argument("--older-than", type=float, metavar="DAYS",
+    selection.add_argument("--older-than", type=_positive_days, metavar="DAYS",
                            help="Workspaces stopped and unused for at least DAYS days")
     selection.add_argument("--id", action="append", dest="ids", metavar="ID",
                            help="One exact VM ID (repeatable)")
+    prune.add_argument("--recovery-only", action="store_true",
+                       help="Only workspaces that need recovery and can never be resumed; "
+                            "healthy stopped workspaces are kept")
     prune.add_argument("--keep", action="append", default=[], metavar="ID",
                        help="Never delete this VM ID, whatever its state (repeatable)")
     prune.add_argument("--dry-run", action="store_true",
                        help="List what would be deleted and kept; change nothing")
+
+
+def _positive_days(value):
+    """A finite age above zero; nan, inf or a negative age would select everything."""
+    import math
+    try:
+        days = float(value)
+    except ValueError:
+        days = math.nan
+    if not math.isfinite(days) or days <= 0:
+        raise argparse.ArgumentTypeError("DAYS must be a finite positive number")
+    return days
 
 
 def add_list_parser(commands, help_text):
@@ -198,7 +213,8 @@ def prune(manager, args):
     """Bulk owner-confirmed discard; running or still-held VMs are listed as kept."""
     older = None if args.older_than is None else args.older_than * 86400
     review = manager.prune_snapshot(everything=args.everything, older_than=older,
-                                    ids=args.ids, keep=args.keep)
+                                    ids=args.ids, keep=args.keep,
+                                    recovery_only=args.recovery_only)
     rows = [{"id": vm_id, "status": snap["record"]["status"],
              "session_id": snap["record"]["session_id"],
              "reason": snap["record"].get("recovery_reason"),

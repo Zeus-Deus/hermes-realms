@@ -334,3 +334,208 @@ def test_cli_delete_discard_is_interactive(fleet):
     assert code == 0, output
     assert "needs recovery" in output or "recovery" in output
     assert not Path(damaged["session_dir"]).exists()
+
+
+def test_systemd_unavailable_refuses_discard_and_prune_and_never_heals(fleet, monkeypatch):
+    """Unknown compute state is never permission to delete or to resume."""
+    manager, stopped, damaged, _, _ = fleet
+    damage(manager, damaged)
+    record = manager.registry.get(stopped["id"])
+    for receipt in record["workspace"]["files"].values():
+        receipt["device"] = 4242
+    record.update(status="recovery-required", recovery_reason="old receipt")
+    manager.registry.put(record)
+    vm = load("vm_manager")
+
+    def unavailable(unit):
+        raise load("lifecycle").RealmError("could not inspect systemd unit " + unit)
+    monkeypatch.setattr(vm, "scope_info", unavailable)
+    before = tree(manager.home)
+    rows = {row["id"]: row for row in manager.list()}
+    assert rows[stopped["id"]]["status"] == "recovery-required"
+    with pytest.raises(load("lifecycle").RealmError, match="could not inspect"):
+        manager.discard_snapshot(damaged["id"], session_id="damaged-owner")
+    with pytest.raises(load("lifecycle").RealmError, match="could not inspect"):
+        manager.delete(damaged["id"], discard=True)
+    review = manager.prune_snapshot(everything=True)
+    assert review["delete"] == {}
+    kept = {row["id"]: row["reason"] for row in review["kept"]}
+    assert "could not inspect" in kept[damaged["id"]] and "could not inspect" in kept[stopped["id"]]
+    assert tree(manager.home) == before
+
+
+def test_confirmed_prune_all_keeps_shared_base_and_iso(fleet):
+    manager, stopped, damaged, running, _ = fleet
+    damage(manager, damaged)
+    iso = manager.data / "iso"
+    iso.mkdir(parents=True, exist_ok=True)
+    (iso / "omarchy.iso").write_bytes(b"shared installer")
+    shared = tree(manager.data)
+    assert any(name.startswith("base/") for name in shared) and "iso/omarchy.iso" in shared
+    deleted = manager.prune(manager.prune_snapshot(everything=True))
+    assert set(deleted) == {stopped["id"], damaged["id"]}
+    assert tree(manager.data) == shared
+    assert manager.registry.get(running["id"])["status"] == "running"
+
+
+def test_prune_recovery_only_keeps_healthy_stopped_workspaces(fleet, capsys):
+    import json
+    manager, stopped, damaged, running, _ = fleet
+    damage(manager, damaged)
+    review = manager.prune_snapshot(everything=True, recovery_only=True)
+    assert set(review["delete"]) == {damaged["id"]}
+    kept = {row["id"]: row["reason"] for row in review["kept"]}
+    assert "not recovery-required" in kept[stopped["id"]]
+    assert running["id"] in kept
+    assert load("cli").main(prune_args(manager, "--all", "--recovery-only", "--dry-run")) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert [row["id"] for row in result["would_delete"]] == [damaged["id"]]
+    code, output = cli_pty(prune_args(manager, "--all", "--recovery-only"), lambda phrase: phrase + b"\n")
+    assert code == 0, output
+    assert "PRUNE 1 " in output
+    assert not Path(damaged["session_dir"]).exists()
+    assert manager.registry.get(stopped["id"])["status"] == "stopped"
+    assert Path(stopped["session_dir"]).exists()
+
+
+def test_prune_recovery_only_keeps_records_that_verify_again(fleet):
+    """A stale recovery mark (from an older receipt) is resumable, so it is not pruned."""
+    manager, stopped, damaged, _, _ = fleet
+    damage(manager, damaged)
+    record = manager.registry.get(stopped["id"])
+    for receipt in record["workspace"]["files"].values():
+        receipt["device"] = 4242
+    record.update(status="recovery-required", recovery_reason="VM retained workspace file changed: disk.qcow2")
+    manager.registry.put(record)
+    registry = {p.name: p.read_bytes() for p in manager.registry.root.glob("v-*.json")}
+    review = manager.prune_snapshot(everything=True, recovery_only=True)
+    assert set(review["delete"]) == {damaged["id"]}
+    kept = {row["id"]: row["reason"] for row in review["kept"]}
+    assert "verifies again" in kept[stopped["id"]]
+    # The review itself still changes nothing; list is what heals.
+    assert {p.name: p.read_bytes() for p in manager.registry.root.glob("v-*.json")} == registry
+    assert stopped["id"] in manager.prune_snapshot(everything=True)["delete"]
+
+
+@pytest.mark.parametrize("days", ["-1", "0", "nan", "inf", "-inf", "soon"])
+def test_cli_prune_older_than_requires_a_finite_positive_age(fleet, days, capsys):
+    manager, stopped, damaged, _, _ = fleet
+    damage(manager, damaged)
+    before = tree(manager.home)
+    with pytest.raises(SystemExit) as exit_:
+        load("cli").main(prune_args(manager, "--older-than=" + days, "--dry-run"))
+    assert exit_.value.code == 2
+    assert "positive" in capsys.readouterr().err
+    assert tree(manager.home) == before
+
+
+def test_cli_prune_older_than_selects_by_age(fleet, capsys):
+    import json
+    manager, stopped, damaged, _, _ = fleet
+    damage(manager, damaged)
+    assert load("cli").main(prune_args(manager, "--older-than", "0.5", "--dry-run")) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["would_delete"] == []
+    assert {stopped["id"], damaged["id"]} <= {row["id"] for row in result["kept"]}
+
+
+def test_partial_prune_failure_reports_what_was_already_deleted(fleet, monkeypatch):
+    manager, stopped, damaged, _, _ = fleet
+    damage(manager, damaged)
+    review = manager.prune_snapshot(everything=True)
+    first, second = sorted(review["delete"])
+    original = manager._delete_locked
+
+    def failing(record, **kwargs):
+        if record["id"] == second:
+            raise OSError("disk error")
+        return original(record, **kwargs)
+    monkeypatch.setattr(manager, "_delete_locked", failing)
+    with pytest.raises(load("lifecycle").RealmError) as failed:
+        manager.prune(review)
+    message = str(failed.value)
+    assert "deleted " + first in message and second in message and "disk error" in message
+    assert failed.value.deleted == [first]
+    assert not manager.registry.path(first).exists()
+    assert manager.registry.path(second).exists()
+
+
+def test_record_without_workspace_directory_can_be_discarded(fleet):
+    """A workspace already removed by hand leaves only a record; that is discardable too."""
+    import shutil
+    manager, stopped, damaged, running, _ = fleet
+    damage(manager, damaged)
+    shutil.rmtree(damaged["session_dir"])
+    assert {row["id"]: row for row in manager.list()}[damaged["id"]]["status"] == "recovery-required"
+    snapshot = manager.discard_snapshot(damaged["id"], session_id="damaged-owner")
+    assert snapshot["deletion"]["contents"] == []
+    # A directory that reappears after review revokes the confirmation.
+    Path(damaged["session_dir"]).mkdir(mode=0o700)
+    with pytest.raises(load("lifecycle").OwnershipError, match="changed"):
+        manager.delete(damaged["id"], session_id="damaged-owner", expected_snapshot=snapshot, discard=True)
+    Path(damaged["session_dir"]).rmdir()
+    snapshot = manager.discard_snapshot(damaged["id"], session_id="damaged-owner")
+    assert manager.delete(damaged["id"], session_id="damaged-owner", expected_snapshot=snapshot, discard=True)
+    assert not manager.registry.path(damaged["id"]).exists()
+    assert manager.registry.get(running["id"])["status"] == "running"
+    assert set(manager.prune_snapshot(everything=True)["delete"]) == {stopped["id"]}
+
+
+@pytest.mark.parametrize("discard", [False, True])
+def test_workspace_swapped_after_final_check_is_not_deleted(fleet, monkeypatch, tmp_path, discard):
+    """The last check and the removal see the same directory, or nothing is removed."""
+    manager, stopped, damaged, _, _ = fleet
+    target = damaged if discard else stopped
+    if discard:
+        damage(manager, damaged)
+    session = Path(target["session_dir"])
+    vm = load("vm_manager")
+    real_rename = os.rename
+    swapped = tmp_path / "swapped-in"
+
+    def swap_then_rename(source, destination):
+        # Another program replaces the workspace between verification and removal.
+        if Path(source) == session and not swapped.exists() and not (tmp_path / "original").exists():
+            real_rename(session, tmp_path / "original")
+            swapped.mkdir(mode=0o700)
+            (swapped / "unrelated").write_bytes(b"not this workspace")
+            real_rename(swapped, session)
+        return real_rename(source, destination)
+    monkeypatch.setattr(vm.os, "rename", swap_then_rename)
+    with pytest.raises(load("lifecycle").OwnershipError, match="replaced"):
+        manager.delete(target["id"], discard=discard)
+    assert (session / "unrelated").read_bytes() == b"not this workspace"
+    assert (tmp_path / "original").exists()
+    assert manager.registry.path(target["id"]).exists()
+
+
+def test_interrupted_removal_of_the_renamed_workspace_finishes_on_retry(fleet, monkeypatch):
+    manager, stopped, _, _, _ = fleet
+    session = Path(stopped["session_dir"])
+    vm = load("vm_manager")
+    rmtree = vm.shutil.rmtree
+
+    def interrupted(path):
+        if Path(path).parent == session.parent:
+            raise OSError("interrupted")
+        rmtree(path)
+    monkeypatch.setattr(vm.shutil, "rmtree", interrupted)
+    with pytest.raises(OSError, match="interrupted"):
+        manager.delete(stopped["id"])
+    assert not session.exists()
+    leftovers = [p.name for p in session.parent.iterdir()]
+    assert leftovers and all(name.startswith(".") for name in leftovers if stopped["generation"] in name)
+    monkeypatch.setattr(vm.shutil, "rmtree", rmtree)
+    # A process still holding a file in the tombstone blocks the retry too.
+    tombstone = session.with_name("." + session.name + ".deleting")
+    disk = open(tombstone / "disk.qcow2", "rb")
+    holder = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], stdin=disk)
+    disk.close()
+    try:
+        assert holder.pid in load("vm_manager").open_holders(manager.registry.get(stopped["id"]))
+    finally:
+        holder.kill()
+        holder.wait()
+    assert manager.delete(stopped["id"])
+    assert not any(stopped["generation"] in p.name for p in session.parent.iterdir())
+    assert not manager.registry.path(stopped["id"]).exists()

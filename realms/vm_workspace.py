@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 
 from .config import Config
@@ -172,10 +173,10 @@ def validate_deletion(record):
                 or receipt["binding"] != {key: record[key] for key in receipt["binding"]}):
             raise OwnershipError("VM deletion receipt binding changed")
         for key in ("runtime_dir", "session_dir"):
-            current = _directory(Path(record[key]))
+            current = _directory(_present(Path(record[key])))
             if current is not None and not _same(current, intent["directories"][key]):
                 raise OwnershipError("VM deletion directory was replaced")
-        session = Path(record["session_dir"])
+        session = _present(Path(record["session_dir"]))
         for name, expected in {**receipt["files"], "ssh_known_hosts": receipt["pin"]}.items():
             if name not in {"disk.qcow2", "OVMF_VARS.4m.fd", "spec.json", "ssh_known_hosts"}:
                 raise OwnershipError("VM deletion file receipt changed")
@@ -215,9 +216,9 @@ def begin_discard(record):
     from .vm_manager import validate_vm_record
     validate_vm_record(record)
     directories = {key: _directory(Path(record[key])) for key in ("runtime_dir", "session_dir")}
-    if directories["session_dir"] is None:
-        raise OwnershipError("VM workspace directory is missing; nothing to discard")
-    contents = _contents(Path(record["session_dir"]))
+    # A workspace already removed by other means leaves only its record; the
+    # discard then removes just that record, under the same compute checks.
+    contents = [] if directories["session_dir"] is None else _contents(Path(record["session_dir"]))
     # A VM workspace holds only regular files. A directory, link or device in
     # it is not something this tool created; inspect it by hand instead.
     for name, kind, *_ in contents:
@@ -236,10 +237,10 @@ def validate_discard(record):
         if intent["version"] != 1 or intent.get("discard") is not True:
             raise OwnershipError("VM deletion is not an owner-confirmed discard")
         for key in ("runtime_dir", "session_dir"):
-            current = _directory(Path(record[key]))
+            current = _directory(_present(Path(record[key])))
             if current is not None and not _same(current, intent["directories"][key]):
                 raise OwnershipError("VM deletion directory was replaced")
-        session = Path(record["session_dir"])
+        session = _present(Path(record["session_dir"]))
         if _directory(session) is not None:
             recorded = {entry[0]: entry for entry in intent["contents"]}
             for entry in _contents(session):
@@ -247,6 +248,47 @@ def validate_discard(record):
                     raise OwnershipError("VM discarded workspace gained or changed an entry: " + entry[0])
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise OwnershipError("VM discard receipt is incomplete; explicit recovery required") from exc
+
+
+def remove_directory(path, bound):
+    """Remove a verified deletion directory with no gap between check and removal.
+
+    The directory is renamed to a tombstone beside it and the tombstone is
+    checked against the inode bound at review, so what was checked is exactly
+    what is removed. A directory swapped in after verification is renamed back
+    and kept. A tombstone left by an interrupted removal is finished on retry
+    under the same check.
+    """
+    tombstone = _tombstone(path)
+    if os.path.lexists(path):
+        if bound is None or os.path.lexists(tombstone):
+            raise OwnershipError("VM deletion directory was replaced")
+        os.rename(path, tombstone)
+        try:
+            _bound_tombstone(tombstone, bound)
+        except OwnershipError:
+            os.rename(tombstone, path)
+            raise
+    elif os.path.lexists(tombstone):
+        _bound_tombstone(tombstone, bound)
+    else:
+        return
+    shutil.rmtree(tombstone)
+
+
+def _tombstone(path):
+    return path.with_name("." + path.name + ".deleting")
+
+
+def _present(path):
+    """The directory a deletion still has to remove: itself, or its tombstone."""
+    tombstone = _tombstone(path)
+    return tombstone if not os.path.lexists(path) and os.path.lexists(tombstone) else path
+
+
+def _bound_tombstone(tombstone, bound):
+    if bound is None or not _same(_directory(tombstone), bound):
+        raise OwnershipError("VM deletion directory was replaced")
 
 
 def restore_pin(record):

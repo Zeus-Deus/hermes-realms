@@ -78,6 +78,16 @@ def _generation_paths(uid, generation):
     return Path(f"/run/user/{uid}/hv-{generation[:16]}")
 
 
+class PruneError(VmError):
+    """A prune that stopped part way; ``deleted`` lists the workspaces already gone."""
+
+    def __init__(self, failed, deleted, cause):
+        self.failed, self.deleted = failed, list(deleted)
+        done = ("already deleted " + ", ".join(self.deleted)) if self.deleted else "nothing was deleted"
+        super().__init__(f"Prune failed on {failed} ({cause}); {done}; "
+                         "review again before retrying the rest")
+
+
 class VmRegistry:
     """Crash-safe per-profile VM records, beside the labwc realm registry."""
 
@@ -170,7 +180,10 @@ def open_holders(record):
     Unreadable processes belong to other users and cannot hold these mode-0700
     directories' files through a path inside them.
     """
-    roots = tuple(str(Path(record[key])) for key in ("session_dir", "runtime_dir"))
+    paths = [Path(record[key]) for key in ("session_dir", "runtime_dir")]
+    # Include the tombstone an interrupted removal leaves behind.
+    roots = tuple(str(path) for directory in paths
+                  for path in (directory, directory.with_name("." + directory.name + ".deleting")))
     holders = set()
     for proc in Path("/proc").iterdir():
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
@@ -556,6 +569,18 @@ class VmManager:
         record.pop("recovery_reason", None)
         self.registry.put(record)
 
+    def _verifies_again(self, record):
+        """Whether a recovery mark is stale: the files verify now. Read-only."""
+        from .vm_workspace import validate as validate_workspace
+        if (record["status"] != "recovery-required" or record.get("cleanup_required") is not False
+                or "deletion" in record):
+            return False
+        try:
+            validate_workspace(record, allow_unlaunched=record.get("launch_pending") is True)
+        except RealmError:
+            return False
+        return True
+
     def _compute_units(self, record):
         from .vm_owner_lifetime import owner_unit
         return {unit: scope_info(unit) for unit in
@@ -668,6 +693,8 @@ class VmManager:
             # Without a registry binding an orphan may be this conversation's
             # retained work. Do not silently create a replacement alongside it.
             registered = {r["session_dir"] for r in self.registry.records()}
+            # An interrupted deletion's tombstone still belongs to its record.
+            registered |= {str(Path(p).with_name("." + Path(p).name + ".deleting")) for p in registered}
             orphans = [p for p in (self.registry.root / "vm").glob("*")
                        if str(p) not in registered]
             if orphans:
@@ -980,13 +1007,17 @@ class VmManager:
                 "holders": holders,
                 "publication": [info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns]}
 
-    def prune_snapshot(self, *, everything=False, older_than=None, ids=None, keep=(), now=None):
+    def prune_snapshot(self, *, everything=False, older_than=None, ids=None, keep=(),
+                       recovery_only=False, now=None):
         """Read-only review of every workspace a bulk discard would remove.
 
         Never reconciles, stops or starts anything: running and starting VMs
         are reported as kept without being touched. Select with ``everything``,
         ``older_than`` (seconds since last use or stop) or exact ``ids``;
-        ``keep`` IDs are always excluded.
+        ``keep`` IDs are always excluded. ``recovery_only`` narrows any
+        selection to workspaces that cannot be resumed: recovery-required ones
+        and interrupted deletions. Healthy stopped workspaces, and recovery
+        marks whose files verify again (which ``list`` heals), are then kept.
         """
         if not everything and older_than is None and not ids:
             raise ValueError("Select workspaces explicitly: all, an age, or exact IDs")
@@ -1009,6 +1040,12 @@ class VmManager:
                 if record["id"] in keep:
                     kept.append(dict(row, reason="Explicitly kept"))
                     continue
+                if recovery_only and record["status"] not in {"recovery-required", "deleting"}:
+                    kept.append(dict(row, reason="VM is " + str(record["status"]) + ", not recovery-required"))
+                    continue
+                if recovery_only and self._verifies_again(record):
+                    kept.append(dict(row, reason="Workspace verifies again; list returns it to stopped"))
+                    continue
                 if older_than is not None and (not last or now - last < older_than):
                     kept.append(dict(row, reason="Used more recently than the requested age"))
                     continue
@@ -1029,9 +1066,14 @@ class VmManager:
                 if self._discard_snapshot_locked(record) != snapshot:
                     raise OwnershipError("Prune target changed since review; review again: " + vm_id)
                 targets.append(record)
+            deleted = []
             for record in targets:
-                self._delete_locked(record, discard=True)
-            return [record["id"] for record in targets]
+                try:
+                    self._delete_locked(record, discard=True)
+                except (RealmError, OSError) as exc:
+                    raise PruneError(record["id"], deleted, exc) from exc
+                deleted.append(record["id"])
+            return deleted
 
     def delete(self, vm_id, *, session_id=None, expected_snapshot=None, discard=False):
         """Explicit administrative deletion of this profile's stopped data only.
@@ -1061,7 +1103,7 @@ class VmManager:
     def _delete_locked(self, record, *, discard=False):
         """Remove one record's workspace. Caller holds the lock and has authorized it."""
         from .vm_owner_lifetime import owner_unit, remove_dropin
-        from .vm_workspace import begin_deletion, validate_deletion
+        from .vm_workspace import begin_deletion, remove_directory, validate_deletion
 
         if discard:
             # Revalidates an interrupted deletion too, never trusting its status.
@@ -1082,9 +1124,8 @@ class VmManager:
         # Publish authorization before deleting any receipt it depends on.
         record["status"] = "deleting"
         self.registry.put(record)
-        for path in (record["runtime_dir"], record["session_dir"]):
-            if Path(path).exists():
-                shutil.rmtree(path)
+        for key in ("runtime_dir", "session_dir"):
+            remove_directory(Path(record[key]), record["deletion"]["directories"][key])
         self.registry.remove(record["id"])
 
     # --- routing surface (mirrors Manager) ---
