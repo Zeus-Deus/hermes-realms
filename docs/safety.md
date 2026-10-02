@@ -33,6 +33,19 @@ The command requires a terminal and displays a target-specific phrase to type ex
 
 Confirmed deletion removes the selected retained workspace, not shared VM base data or another session's work. An interrupted `deleting` operation requires fresh inspection and confirmation before retrying. `--session-id` is an administrative selection check, not authenticated conversation identity or a security boundary against other programs running as the same user. These commands are not a model-tool Delete action or a `/realm delete` slash command.
 
+### VM workspaces that need recovery
+A stopped VM is `recovery-required` when its retained files no longer match the receipt taken when it was created: a disk, firmware or spec file was replaced, the SSH pin is missing (a launch that died before enrolling), or the base it depends on changed. Plain `vm delete` refuses those, because it only deletes what it can verify. Receipts bind files by inode and require each file to be on the same filesystem as its directory; they do not record the kernel's device number, which btrfs and device-mapper volumes renumber across reboots. Older receipts that did record it are compared without it, and a record that verifies again returns to `stopped` on the next `list`.
+
+To remove a workspace that still does not verify, the owner confirms a discard:
+
+```sh
+hermes realms vm delete ID --session-id OWNER --discard
+hermes realms vm prune --all --dry-run       # list what would be deleted and kept
+hermes realms vm prune --all                 # same list, then one typed confirmation
+```
+
+`prune` also accepts `--older-than DAYS` or exact `--id ID` selections, and `--keep ID` to exclude a VM whatever its state. A discard is refused unless the record is stopped or recovery-required with confirmed retirement (`cleanup_required` false), the VM unit, its lifetime unit and its sleep guard are all inactive, and no process of this user holds any file under the workspace or runtime directory open. Running and starting VMs are listed as kept and never touched; the review itself reconciles, stops and starts nothing. The confirmation binds the record publication, compute state and every top-level entry of the workspace (name, inode, size, mtime); a workspace with a link, directory or other non-file entry is refused. Any change between review and confirmation, including a start/stop cycle, cancels the whole prune. An interrupted discard can only be finished by another discard, which accepts entries already removed but not new or changed ones.
+
 ## Legacy upgrade safety
 Older regular Realms may keep HOME only under volatile `/run`, and their already-running guardians may hold destructive cleanup code even after source files change. Updating the files does not migrate those processes.
 

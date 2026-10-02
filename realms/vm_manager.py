@@ -162,6 +162,34 @@ def validate_vm_record(record):
             raise OwnershipError("realm runtime permissions changed")
 
 
+def open_holders(record):
+    """PIDs of this user's processes holding a file in the VM's directories.
+
+    A second, process-level check that compute is gone, independent of systemd
+    unit bookkeeping: a QEMU that escaped its unit still holds its disk open.
+    Unreadable processes belong to other users and cannot hold these mode-0700
+    directories' files through a path inside them.
+    """
+    roots = tuple(str(Path(record[key])) for key in ("session_dir", "runtime_dir"))
+    holders = set()
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit() or int(proc.name) == os.getpid():
+            continue
+        try:
+            entries = list((proc / "fd").iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                target = os.readlink(entry)
+            except OSError:
+                continue
+            if any(target == root or target.startswith(root + "/") for root in roots):
+                holders.add(int(proc.name))
+                break
+    return sorted(holders)
+
+
 def unit_active(unit):
     # Failed observation is unknown, never permission to discard a live guest.
     return scope_info(unit).get("ActiveState") == "active"
@@ -492,6 +520,9 @@ class VmManager:
                 except OwnershipError as exc:
                     record.update(status="recovery-required", recovery_reason=str(exc))
                     self.registry.put(record)
+            elif (record["status"] == "recovery-required"
+                  and record.get("cleanup_required") is False and "deletion" not in record):
+                self._heal_locked(record)
             elif record["status"] == "running" and not unit_active(record["unit"]):
                 self._remove_locked(record)
             elif record["status"] == "starting":
@@ -504,6 +535,35 @@ class VmManager:
                 self._stop_locked(record)
             elif record["status"] not in ("running", "starting", "stopped", "recovery-required", "deleting"):
                 self._remove_locked(record)
+
+    def _heal_locked(self, record):
+        """Return a confirmed-retired workspace to Stopped once it verifies again.
+
+        Recovery is a verdict on the current files, not a permanent mark: an
+        earlier receipt check may have failed for a reason that no longer holds
+        (receipts once recorded the boot-unstable device number). Only records
+        whose retirement was confirmed are eligible, and the full stopped-state
+        validation must pass with every compute unit inactive.
+        """
+        from .vm_workspace import validate as validate_workspace
+        try:
+            validate_workspace(record, allow_unlaunched=record.get("launch_pending") is True)
+            if not self._compute_stopped(record):
+                return
+        except RealmError:
+            return
+        record["status"] = "stopped"
+        record.pop("recovery_reason", None)
+        self.registry.put(record)
+
+    def _compute_units(self, record):
+        from .vm_owner_lifetime import owner_unit
+        return {unit: scope_info(unit) for unit in
+                (record["unit"], owner_unit(record), record["guardian_unit"])}
+
+    def _compute_stopped(self, record, units=None):
+        units = self._compute_units(record) if units is None else units
+        return all(info["ActiveState"] in {"inactive", "failed"} for info in units.values())
 
     def _stop_locked(self, record):
         """Power down compute without deleting guest work. Caller holds the lock."""
@@ -856,7 +916,9 @@ class VmManager:
         from .vm_workspace import begin_deletion, validate_deletion
 
         if record["status"] not in {"stopped", "deleting"}:
-            raise VmError("Only a verified stopped VM workspace can be deleted")
+            raise VmError("Only a verified stopped VM workspace can be deleted"
+                          + ("; use --discard for a recovery-required one"
+                             if record["status"] == "recovery-required" else ""))
         units = {unit: scope_info(unit) for unit in
                  (record["unit"], owner_unit(record), record["guardian_unit"])}
         if any(info["ActiveState"] not in {"inactive", "failed"} for info in units.values()):
@@ -871,41 +933,159 @@ class VmManager:
         return {"record": record, "deletion": candidate["deletion"], "compute": units,
                 "publication": [info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns]}
 
-    def delete(self, vm_id, *, session_id=None, expected_snapshot=None):
+    def discard_snapshot(self, vm_id, *, session_id):
+        """Read-only review for discarding a workspace that cannot be verified."""
+        with self.registry.lock():
+            record = self.registry.get(vm_id)
+            if not session_id or record["session_id"] != session_id:
+                raise OwnershipError("workspace belongs to another session")
+            return self._discard_snapshot_locked(record)
+
+    def _discard_snapshot_locked(self, record):
+        """What an owner-confirmed discard would remove, if compute is provably gone.
+
+        Unlike Delete this does not require the retained-file receipt to verify,
+        because recovery-required data is exactly the data whose receipt does
+        not. It still requires: a stopped or recovery-required record whose
+        retirement was confirmed, every compute unit inactive, no process
+        holding any file in the workspace or runtime directory, and a workspace
+        directory of plain files owned by this user. The snapshot binds the
+        exact directories and entries so any later change revokes consent.
+        """
+        from copy import deepcopy
+        from .vm_workspace import begin_discard, validate_deletion, validate_discard
+
+        validate_vm_record(record)
+        if record["status"] not in {"stopped", "recovery-required", "deleting"}:
+            raise VmError("VM is " + str(record["status"]) + "; compute is not stopped, so it is never discarded")
+        if record.get("cleanup_required") is True:
+            raise VmError("Compute retirement was not confirmed; run vm stop first")
+        units = self._compute_units(record)
+        if not self._compute_stopped(record, units):
+            raise OwnershipError("VM compute is not stopped; deletion refused")
+        holders = open_holders(record)
+        if holders:
+            raise OwnershipError("A running process still holds this VM workspace open (pid "
+                                 + ", ".join(map(str, holders)) + "); deletion refused")
+        candidate = deepcopy(record)
+        if candidate["status"] == "deleting":
+            if candidate.get("deletion", {}).get("discard") is True:
+                validate_discard(candidate)
+            else:
+                validate_deletion(candidate)
+        else:
+            begin_discard(candidate)
+        info = self.registry.path(record["id"]).stat()
+        return {"record": record, "deletion": candidate["deletion"], "compute": units,
+                "holders": holders,
+                "publication": [info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns]}
+
+    def prune_snapshot(self, *, everything=False, older_than=None, ids=None, keep=(), now=None):
+        """Read-only review of every workspace a bulk discard would remove.
+
+        Never reconciles, stops or starts anything: running and starting VMs
+        are reported as kept without being touched. Select with ``everything``,
+        ``older_than`` (seconds since last use or stop) or exact ``ids``;
+        ``keep`` IDs are always excluded.
+        """
+        if not everything and older_than is None and not ids:
+            raise ValueError("Select workspaces explicitly: all, an age, or exact IDs")
+        now = time.time() if now is None else now
+        selected = None if not ids else set(ids)
+        keep = set(keep)
+        with self.registry.lock():
+            delete, kept = {}, []
+            records = self.registry.records()
+            known = {r["id"] for r in records}
+            for vm_id in sorted(((selected or set()) | keep) - known):
+                kept.append({"id": vm_id, "status": "missing", "reason": "No such VM in this profile"})
+            for record in records:
+                if selected is not None and record["id"] not in selected:
+                    continue
+                last = max(record.get("last_activity") or 0, record.get("stopped_at") or 0)
+                row = {"id": record["id"], "status": record["status"],
+                       "session_id": record["session_id"],
+                       "idle_seconds": int(now - last) if last else None}
+                if record["id"] in keep:
+                    kept.append(dict(row, reason="Explicitly kept"))
+                    continue
+                if older_than is not None and (not last or now - last < older_than):
+                    kept.append(dict(row, reason="Used more recently than the requested age"))
+                    continue
+                try:
+                    delete[record["id"]] = self._discard_snapshot_locked(record)
+                except RealmError as exc:
+                    kept.append(dict(row, reason=str(exc)))
+            return {"delete": delete, "kept": kept}
+
+    def prune(self, expected):
+        """Discard exactly the reviewed set, or nothing if any target changed."""
+        with self.registry.lock():
+            targets = []
+            for vm_id, snapshot in sorted(expected["delete"].items()):
+                if not self.registry.path(vm_id).exists():
+                    raise OwnershipError("Prune target disappeared; review again: " + vm_id)
+                record = self.registry.get(vm_id)
+                if self._discard_snapshot_locked(record) != snapshot:
+                    raise OwnershipError("Prune target changed since review; review again: " + vm_id)
+                targets.append(record)
+            for record in targets:
+                self._delete_locked(record, discard=True)
+            return [record["id"] for record in targets]
+
+    def delete(self, vm_id, *, session_id=None, expected_snapshot=None, discard=False):
         """Explicit administrative deletion of this profile's stopped data only.
 
         Not a model tool. Callers must separately authorize the conversation;
         an incomplete recovery record is not permission to erase its data.
+        ``discard`` is that separate authorization: an owner-confirmed removal
+        of a recovery-required workspace whose compute is provably gone.
         """
-        from .vm_owner_lifetime import owner_unit, remove_dropin
-        from .vm_workspace import begin_deletion, validate_deletion
-
         with self.registry.lock():
             if not self.registry.path(vm_id).exists():
                 return False
             record = self.registry.get(vm_id)
             if session_id is not None and record["session_id"] != session_id:
                 raise OwnershipError("workspace belongs to another session")
+            if discard:
+                snapshot = self._discard_snapshot_locked(record)
+                if expected_snapshot is not None and snapshot != expected_snapshot:
+                    raise OwnershipError("Delete confirmation target changed; confirm again")
+                self._delete_locked(record, discard=True)
+                return True
             if expected_snapshot is not None and self._delete_snapshot_locked(record) != expected_snapshot:
                 raise OwnershipError("Delete confirmation target changed; confirm again")
-            if record["status"] not in {"stopped", "deleting"}:
-                raise VmError("Only a verified stopped VM workspace can be deleted")
-            if record["status"] == "stopped":
-                begin_deletion(record)
-            else:
-                validate_deletion(record)
-            for unit in (record["unit"], owner_unit(record), record["guardian_unit"]):
-                if scope_info(unit)["ActiveState"] not in {"inactive", "failed"}:
-                    raise OwnershipError("VM compute is not stopped; deletion refused")
-            remove_dropin(record)
-            # Publish authorization before deleting any receipt it depends on.
-            record["status"] = "deleting"
-            self.registry.put(record)
-            for path in (record["runtime_dir"], record["session_dir"]):
-                if Path(path).exists():
-                    shutil.rmtree(path)
-            self.registry.remove(vm_id)
+            self._delete_locked(record)
             return True
+
+    def _delete_locked(self, record, *, discard=False):
+        """Remove one record's workspace. Caller holds the lock and has authorized it."""
+        from .vm_owner_lifetime import owner_unit, remove_dropin
+        from .vm_workspace import begin_deletion, validate_deletion
+
+        if discard:
+            # Revalidates an interrupted deletion too, never trusting its status.
+            intent = self._discard_snapshot_locked(record)["deletion"]
+            if record["status"] != "deleting":
+                record["deletion"] = intent
+        elif record["status"] == "stopped":
+            begin_deletion(record)
+        elif record["status"] == "deleting" and record.get("deletion", {}).get("discard") is not True:
+            validate_deletion(record)
+        else:
+            raise VmError("Only a verified stopped VM workspace can be deleted; "
+                          "use --discard for a recovery-required one")
+        for unit in (record["unit"], owner_unit(record), record["guardian_unit"]):
+            if scope_info(unit)["ActiveState"] not in {"inactive", "failed"}:
+                raise OwnershipError("VM compute is not stopped; deletion refused")
+        remove_dropin(record)
+        # Publish authorization before deleting any receipt it depends on.
+        record["status"] = "deleting"
+        self.registry.put(record)
+        for path in (record["runtime_dir"], record["session_dir"]):
+            if Path(path).exists():
+                shutil.rmtree(path)
+        self.registry.remove(record["id"])
 
     # --- routing surface (mirrors Manager) ---
 
