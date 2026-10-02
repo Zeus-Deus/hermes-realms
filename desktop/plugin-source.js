@@ -80,6 +80,30 @@ export async function openRealmViewer(ctx, session, realm, target, isCurrent = (
   if (session.connectionId !== LOCAL_CONNECTION_ID) throw new Error(REMOTE_VIEWER_UNSUPPORTED);
   const scope = Object.freeze({ ...session });
   const path = `/realms/${encodeURIComponent(realm.id)}`;
+  const label = `${kindName(realm.kind)} · ${scope.profile}`;
+  let id;
+  // Each viewer document needs its own ticket: the page reads it once and
+  // strips it from its address, so a rebuilt document cannot reuse it.
+  const show = async current => {
+    const { url, onKeepAlive } = await mintViewer(ctx, path, scope, isEnabled);
+    id ??= await viewerId(scope, realm.id);
+    if (!current()) throw new Error('Realm owner changed before viewer opened');
+    return target === 'watch'
+      // Hosts without session viewer re-open ignore `onReopen`.
+      ? host.openPreview?.({ url, label, session: scope, onKeepAlive, onReopen })
+      : ctx.os?.openViewer?.({ id, url, title: label.slice(0, 120), session: scope, onKeepAlive });
+  };
+  // The host asks for this when it rebuilds the Watch tab (for example after
+  // its session was away). The bridge decides whether the realm is still live
+  // and still this session's; a refusal leaves the tab as it was.
+  const onReopen = async () => {
+    if (!isEnabled()) throw new Error('Viewer plugin is disabled');
+    if (!await show(() => true)) throw new Error('Viewer unavailable or session owner is stale');
+  };
+  if (!await show(isCurrent)) throw new Error('Viewer unavailable or session owner is stale');
+}
+
+async function mintViewer(ctx, path, scope, isEnabled) {
   const reply = await ctx.rest(`${path}/watch`, { method: 'POST', body: ownerBody(scope), scope });
   let url;
   try { url = new URL(reply.url); } catch { throw new Error('Invalid viewer URL'); }
@@ -93,13 +117,7 @@ export async function openRealmViewer(ctx, session, realm, target, isCurrent = (
     });
     if (result?.renewed !== true) throw new Error('Viewer authorization could not be renewed');
   };
-  const id = await viewerId(scope, realm.id);
-  if (!isCurrent()) throw new Error('Realm owner changed before viewer opened');
-  const label = `${kindName(realm.kind)} · ${scope.profile}`;
-  const opened = target === 'watch'
-    ? await host.openPreview?.({ url: reply.url, label, session: scope, onKeepAlive })
-    : await ctx.os?.openViewer?.({ id, url: reply.url, title: label.slice(0, 120), session: scope, onKeepAlive });
-  if (!opened) throw new Error('Viewer unavailable or session owner is stale');
+  return { url: reply.url, onKeepAlive };
 }
 
 export default {
