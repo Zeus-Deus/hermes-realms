@@ -133,7 +133,7 @@ def cli_pty(argv, respond, mutate=lambda: None, *, native=False):
             if not data:
                 break
             output += data
-            prompt = re.search(rb"Type (DELETE [^\r\n]+) to confirm: ", output)
+            prompt = re.search(rb"Type ((?:DELETE|PRUNE) [^\r\n]+) to confirm: ", output)
             if prompt and not replied:
                 mutate()
                 os.write(fd, respond(prompt.group(1)))

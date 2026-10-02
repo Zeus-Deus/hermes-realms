@@ -61,7 +61,40 @@ def configure_vm_parser(parser):
         "remove-base", help="Delete this profile's base image (not the ISO)")
     operations.add_parser("clean", help="Remove stale ISOs; preserve all workspace data")
     operations.add_parser("stop").add_argument("id")
-    configure_delete_parser(operations)
+    delete = configure_delete_parser(operations)
+    delete.add_argument(
+        "--discard", action="store_true",
+        help="Also delete a recovery-required workspace whose files no longer verify. "
+             "Refused unless every compute unit is inactive and no process holds its files")
+    prune = operations.add_parser(
+        "prune", help="Permanently delete stopped and recovery-required VM workspaces "
+                      "(running VMs are never touched; interactive only)")
+    selection = prune.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--all", action="store_true", dest="everything",
+                           help="Every VM workspace whose compute is provably stopped")
+    selection.add_argument("--older-than", type=_positive_days, metavar="DAYS",
+                           help="Workspaces stopped and unused for at least DAYS days")
+    selection.add_argument("--id", action="append", dest="ids", metavar="ID",
+                           help="One exact VM ID (repeatable)")
+    prune.add_argument("--recovery-only", action="store_true",
+                       help="Only workspaces that need recovery and can never be resumed; "
+                            "healthy stopped workspaces are kept")
+    prune.add_argument("--keep", action="append", default=[], metavar="ID",
+                       help="Never delete this VM ID, whatever its state (repeatable)")
+    prune.add_argument("--dry-run", action="store_true",
+                       help="List what would be deleted and kept; change nothing")
+
+
+def _positive_days(value):
+    """A finite age above zero; nan, inf or a negative age would select everything."""
+    import math
+    try:
+        days = float(value)
+    except ValueError:
+        days = math.nan
+    if not math.isfinite(days) or days <= 0:
+        raise argparse.ArgumentTypeError("DAYS must be a finite positive number")
+    return days
 
 
 def add_list_parser(commands, help_text):
@@ -90,17 +123,24 @@ def configure_delete_parser(commands):
     command.add_argument("id")
     command.add_argument("--session-id", required=True,
                          help="Explicit owner selection, not session authentication")
+    return command
 
 
 def confirmed_delete(manager, args):
     """Profile-admin consent only; never a model action or same-UID barrier."""
     if not sys.stdin.isatty() or not sys.stderr.isatty():
         raise RealmError("Delete requires an interactive terminal for confirmation")
-    snapshot = manager.delete_snapshot(args.id, session_id=args.session_id)
+    discard = getattr(args, "discard", False)
+    if discard:
+        snapshot = manager.discard_snapshot(args.id, session_id=args.session_id)
+    else:
+        snapshot = manager.delete_snapshot(args.id, session_id=args.session_id)
     record = snapshot["record"]
     digest = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()[:12]
     phrase = f"DELETE {args.id} {digest}"
     print("Permanently delete retained workspace data (no automatic Stop):", file=sys.stderr)
+    if discard and record.get("recovery_reason"):
+        print("Discarding a workspace that needs recovery: " + record["recovery_reason"], file=sys.stderr)
     print(json.dumps({key: record[key] for key in (
         "id", "home", "session_id", "status", "generation", "compute_generation",
         "workspace_dir", "session_dir", "runtime_dir",
@@ -112,7 +152,8 @@ def confirmed_delete(manager, args):
         raise RealmError("Delete cancelled") from None
     if response.rstrip("\r\n") != phrase:
         raise RealmError("Delete cancelled; confirmation did not match")
-    deleted = manager.delete(args.id, session_id=args.session_id, expected_snapshot=snapshot)
+    deleted = manager.delete(args.id, session_id=args.session_id, expected_snapshot=snapshot,
+                             **({"discard": True} if discard else {}))
     if not deleted:
         raise RealmError("Delete confirmation target changed; confirm again")
     return {"deleted": True, "id": args.id}
@@ -150,10 +191,58 @@ def run_vm(args):
         result = confirmed_delete(manager, args)
     elif args.vm_operation == "clean":
         result = clean(manager)
+    elif args.vm_operation == "prune":
+        result = prune(manager, args)
     else:
         result = {"stopped": manager.stop(args.id), "id": args.id}
     print(json.dumps(result, sort_keys=True))
     return 0
+
+
+def _size(snapshot):
+    """Bytes a discard would free, from the entries bound into its review."""
+    contents = snapshot["deletion"].get("contents")
+    if contents is not None:
+        return sum(entry[3] for entry in contents)
+    from pathlib import Path
+    directory = Path(snapshot["record"]["session_dir"])
+    return sum(p.lstat().st_size for p in directory.iterdir()) if directory.is_dir() else 0
+
+
+def prune(manager, args):
+    """Bulk owner-confirmed discard; running or still-held VMs are listed as kept."""
+    older = None if args.older_than is None else args.older_than * 86400
+    review = manager.prune_snapshot(everything=args.everything, older_than=older,
+                                    ids=args.ids, keep=args.keep,
+                                    recovery_only=args.recovery_only)
+    rows = [{"id": vm_id, "status": snap["record"]["status"],
+             "session_id": snap["record"]["session_id"],
+             "reason": snap["record"].get("recovery_reason"),
+             "bytes": _size(snap)} for vm_id, snap in sorted(review["delete"].items())]
+    summary = {"would_delete": rows, "kept": review["kept"],
+               "bytes": sum(row["bytes"] for row in rows)}
+    if args.dry_run or not rows:
+        return dict(summary, dry_run=bool(args.dry_run), deleted=[])
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        raise RealmError("Prune requires an interactive terminal for confirmation; use --dry-run to list")
+    digest = hashlib.sha256(json.dumps(review["delete"], sort_keys=True).encode()).hexdigest()[:12]
+    phrase = f"PRUNE {len(rows)} {digest}"
+    print(f"Permanently delete {len(rows)} VM workspace(s), {summary['bytes'] / 2**30:.1f} GiB "
+          "(no automatic Stop; running VMs are kept):", file=sys.stderr)
+    for row in rows:
+        print(f"  {row['id']}  {row['status']}  {row['session_id']}"
+              + (f"  ({row['reason']})" if row["reason"] else ""), file=sys.stderr)
+    for row in review["kept"]:
+        print(f"  keep {row['id']}  {row['status']}: {row['reason']}", file=sys.stderr)
+    print(f"Type {phrase} to confirm: ", end="", file=sys.stderr, flush=True)
+    try:
+        response = sys.stdin.readline()
+    except (EOFError, KeyboardInterrupt):
+        raise RealmError("Prune cancelled") from None
+    if response.rstrip("\r\n") != phrase:
+        raise RealmError("Prune cancelled; confirmation did not match")
+    deleted = manager.prune(review)
+    return dict(summary, dry_run=False, deleted=deleted)
 
 
 def clean(manager):

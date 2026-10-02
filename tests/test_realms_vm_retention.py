@@ -187,9 +187,10 @@ def test_interrupted_delete_is_retryable_without_poisoning_inventory(owned, monk
     session = Path(record["session_dir"])
     rmtree, remove = vm.shutil.rmtree, manager.registry.remove
     def interrupted_tree(path):
-        if Path(path) == session:
+        # Removal goes through a hidden tombstone renamed beside the workspace.
+        if Path(path) in {session, session.with_name("." + session.name + ".deleting")}:
             if interrupt == "pin":
-                (session / "ssh_known_hosts").unlink()
+                (Path(path) / "ssh_known_hosts").unlink()
             else:
                 rmtree(path)
             raise OSError("interrupted explicit deletion")
@@ -236,6 +237,8 @@ def test_delete_retry_revalidates_owned_receipts_and_units(owned, monkeypatch, c
     session = Path(record["session_dir"])
     if change in {"session_dir", "runtime_dir"}:
         path = Path(record[change])
+        if not path.exists():  # the interrupted removal left it as a tombstone
+            path = path.with_name("." + path.name + ".deleting")
         path.rename(path.with_name(path.name + "-original"))
         path.mkdir(mode=0o700)
         (path / "unrelated").write_bytes(b"preserve replacement")

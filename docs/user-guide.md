@@ -64,6 +64,18 @@ hermes realms delete ID --session-id OWNER
 hermes realms vm delete ID --session-id OWNER
 ```
 
+A stopped VM shown as `needs recovery` can't be resumed or deleted this way because its files no longer match their receipt. If you don't need its contents, discard it explicitly. Both commands refuse any VM whose compute is still running or whose files a process still holds open:
+
+```sh
+hermes realms vm delete ID --session-id OWNER --discard
+hermes realms vm prune --all --recovery-only --dry-run   # list what would go and what is kept
+hermes realms vm prune --all --recovery-only             # then confirm the same list once
+```
+
+Run `hermes realms vm list` first: it returns workspaces that verify again to `stopped`. `--recovery-only` keeps every healthy stopped workspace; leave it out only if you also want those gone.
+
+See [safety](safety.md#vm-workspaces-that-need-recovery) for exactly what is checked.
+
 Get the exact ID and `session_id` from the corresponding `list` command in the intended profile. Delete requires an interactive terminal and exact typed confirmation. It refuses running, foreign or changed targets, including a restart during confirmation. It never automatically stops compute, removes another workspace, or deletes shared VM base data. Cancelled/noninteractive confirmation deletes nothing; interrupted deletion needs a fresh review. Owner selection is administrative, not authenticated session identity. Native session Delete UI remains unqualified; there is no model-tool Delete or `/realm delete` slash command.
 
 ## From a terminal
