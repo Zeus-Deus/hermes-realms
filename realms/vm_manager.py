@@ -8,8 +8,8 @@ cannot break the host.
 
 The guest itself is not ours. It is installed by Omarchy's own signed ISO
 through the vendored ``omarchy vm`` script, and every session boots a
-copy-on-write clone of one installed base image, so a chat costs 196 KiB and a
-few seconds rather than a download and an install.
+copy-on-write clone of one installed base image. Its overlay starts small and
+grows with guest writes rather than downloading and installing another OS.
 
 Isolation honesty, same as the labwc realm's: project files are *copied* in and
 out, never mounted; the guest reaches the network through QEMU user-mode
@@ -511,7 +511,49 @@ class VmManager:
     def list(self):
         with self.registry.lock():
             self._reconcile_locked()
+            self._expire_locked()
             return self.registry.records()
+
+    def _expire_locked(self, *, keep_session=None):
+        """Reclaim unused stopped disks under the profile's current retention policy.
+
+        This never retires compute. Failed observations preserve the workspace
+        and do not prevent another conversation from starting. Only deletions
+        begun by this policy may be retried without a fresh manual review.
+        """
+        import logging
+        import math
+
+        days = self.config.vm.workspace_retention_days
+        if days == 0:
+            return
+        cutoff = time.time() - days * 86400
+        for record in self.registry.records():
+            if record["session_id"] == keep_session or record.get("cleanup_required") is not False:
+                continue
+            status = record["status"]
+            if status == "deleting":
+                intent = record.get("deletion")
+                if not isinstance(intent, dict) or intent.get("automatic") is not True:
+                    continue
+            elif status not in {"stopped", "recovery-required"}:
+                continue
+            stopped = record.get("stopped_at")
+            last = record.get("last_activity", stopped)
+            if any(isinstance(value, bool) or not isinstance(value, (int, float))
+                   or not math.isfinite(value) or value <= 0 for value in (stopped, last)):
+                continue
+            if max(stopped, last) > cutoff:
+                continue
+            try:
+                # Reuse the inactive-unit, open-file, ownership and tombstone
+                # checks used by explicit prune; age alone authorizes nothing.
+                self._delete_locked(record, discard=True, automatic=True)
+            except (RealmError, OSError):
+                logging.getLogger(__name__).warning(
+                    "VM workspace expiry deferred for %s", record["id"], exc_info=True)
+            else:
+                logging.getLogger(__name__).info("Expired stopped VM workspace %s", record["id"])
 
     def _reconcile_locked(self):
         """Retire records whose guest is gone, and guests nobody is using.
@@ -658,6 +700,7 @@ class VmManager:
             raise ValueError("session_id must contain 1 to 256 characters")
         with self.registry.lock():
             self._reconcile_locked()
+            self._expire_locked(keep_session=session_id)
             existing = [
                 r for r in self.registry.records() if r["session_id"] == session_id
             ]
@@ -815,7 +858,7 @@ class VmManager:
             raise
 
     def _clone_base(self, session_dir, base_disk):
-        """Copy-on-write clone. 196 KiB and hundredths of a second per chat."""
+        """Copy-on-write overlay: share the base and store guest changes."""
         subprocess.run(
             [
                 "qemu-img", "create", "-f", "qcow2",
@@ -1100,7 +1143,7 @@ class VmManager:
             self._delete_locked(record)
             return True
 
-    def _delete_locked(self, record, *, discard=False):
+    def _delete_locked(self, record, *, discard=False, automatic=False):
         """Remove one record's workspace. Caller holds the lock and has authorized it."""
         from .vm_owner_lifetime import owner_unit, remove_dropin
         from .vm_workspace import begin_deletion, remove_directory, validate_deletion
@@ -1117,6 +1160,8 @@ class VmManager:
         else:
             raise VmError("Only a verified stopped VM workspace can be deleted; "
                           "use --discard for a recovery-required one")
+        if automatic:
+            record["deletion"]["automatic"] = True
         for unit in (record["unit"], owner_unit(record), record["guardian_unit"]):
             if scope_info(unit)["ActiveState"] not in {"inactive", "failed"}:
                 raise OwnershipError("VM compute is not stopped; deletion refused")

@@ -57,7 +57,7 @@ Explicit Disable survives backend restarts and cannot be silently reversed by th
 
 Watch and Pop out do not grant input. Human takeover excludes agent inspection/input on that target; an interrupted connection is not handback. Unrelated parent work remains available. Closing a viewer is not a request to stop or delete its target. Remote Watch/Pop out requires an explicit viewer tunnel, not a backend loopback URL.
 
-Save application changes before Stop: retained files/disks do not preserve unsaved application memory. Modern workspaces survive compute retirement and can be explicitly reused after validation. Missing ownership or unregistered work must not be hidden by a fresh empty replacement. Generic VM Clean preserves workspace data and cleans stale downloads. Explicit administrative Delete is available for stopped workspaces:
+Save application changes before Stop: retained files/disks do not preserve unsaved application memory. Modern workspaces survive compute retirement and can be explicitly reused after validation. Stopped VM disks expire after 14 days without use by default, during VM listing or startup; running guests are protected. This applies to existing stopped disks too. Set `plugins.realms.vm.workspace_retention_days: 0` to keep VM workspaces indefinitely, or choose a longer period. Export guest-only work before expiry. Missing ownership or unregistered work must not be hidden by a fresh empty replacement. Generic VM Clean preserves workspace data and cleans stale downloads. Explicit administrative Delete is available for stopped workspaces:
 
 ```sh
 hermes realms delete ID --session-id OWNER
