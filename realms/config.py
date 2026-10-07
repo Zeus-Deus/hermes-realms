@@ -33,13 +33,14 @@ KINDS = ("realm", "omarchy-vm")
 
 @dataclass(frozen=True)
 class VmConfig:
-    """Omarchy VM guest sizing and exposure. Applies at the next guest boot."""
+    """Omarchy VM guest sizing, exposure and stopped-workspace retention."""
 
     memory: int = 3072
     network: bool = True
     disk_size: str = "40G"
     omarchy_vm_path: str = ""
     boot_timeout: float = 180
+    workspace_retention_days: float = 14
 
     def __post_init__(self):
         import math
@@ -51,6 +52,11 @@ class VmConfig:
             raise ValueError("vm.memory must be between 1024 and 262144 MiB")
         if not isinstance(self.network, bool):
             raise ValueError("vm.network must be a YAML boolean")
+        if (isinstance(self.workspace_retention_days, bool)
+                or not isinstance(self.workspace_retention_days, (int, float))
+                or not math.isfinite(self.workspace_retention_days)
+                or self.workspace_retention_days < 0):
+            raise ValueError("vm.workspace_retention_days must be finite and nonnegative (0 disables expiry)")
         if not isinstance(self.disk_size, str) or not re.fullmatch(
             r"[1-9][0-9]{0,3}G", self.disk_size
         ):

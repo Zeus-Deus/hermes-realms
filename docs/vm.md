@@ -13,7 +13,7 @@ hermes realms vm settings --check-updates
 ```
 
 - Files are copied explicitly, never automatically mounted or synchronized. The host private key and SSH agent are not copied or forwarded into the guest; X11 forwarding is also disabled.
-- The guest disk is unencrypted and its desktop account has passwordless sudo. Keep personal tokens and authentication files out of it. Retained disks remain on the host after Stop.
+- The guest disk is unencrypted and its desktop account has passwordless sudo. Keep personal tokens and authentication files out of it. Disks remain after Stop and are automatically reclaimed after 14 days without use, once compute is verified stopped. Configure `plugins.realms.vm.workspace_retention_days` to extend retention or set it to `0` to keep them indefinitely. Running guests never expire under this storage policy.
 - Guest networking is enabled by default. QEMU user networking can expose host loopback services through `10.0.2.2`; `plugins.realms.vm.network: false` selects restricted networking. A VM is not a promise of unlimited containment.
 - Host terminal execution does not become guest execution. Targeted guest commands receive their target environment, not the host's API credentials or display/bus handles.
 - Hermes computer-use is wired to the guest driver for capture and input. `/realm shot` is a separate permitted screenshot fallback, not a way around human control or CUA permission checks.

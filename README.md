@@ -19,7 +19,7 @@ Manual controls, if you want them:
 |---|---|
 | `/realm on` | Let the agent use a Realm in this conversation. `/realm on omarchy` picks the Omarchy VM. |
 | `/realm off` | Stop the agent from using a Realm. The desktop and your view of it stay. |
-| `/realm stop` | Shut the Realm down and keep its workspace. |
+| `/realm stop` | Shut the Realm down and keep its workspace. Stopped VM workspaces expire after 14 unused days by default. |
 | `/realm watch` | Open a view-only window onto the running Realm. |
 | `/realm status` | Show the kind, whether it is running, and setup state. |
 | `/realm repair` | Reset the agent's GUI-control connection to a running Realm. |
