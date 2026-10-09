@@ -54,7 +54,7 @@ class Degraded:
 
     def storage_error(self):
         return {"error": STORAGE + " Realms also could not load: " + _cause(self.exc) + ".",
-                "error_code": "legacy_permission_review_required"}
+                "error_code": "realms_store_unavailable"}
 
     def snapshot(self):
         """(alias -> owner, owners holding Realm state). Raises when unreadable."""

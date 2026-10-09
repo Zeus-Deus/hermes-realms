@@ -65,7 +65,8 @@ class ControlAuthority:
             or stat.S_IMODE(info.st_mode) != 0o600
         ):
             raise ValueError("Viewer authority ownership changed")
-        with _store_locks[str(self.directory.absolute())]:
+        from .selection_store import store_lock
+        with _store_locks[str(self.directory.absolute())], store_lock(self.path, shared=False):
             db = sqlite3.connect(self.path, timeout=3)
             try:
                 with db:

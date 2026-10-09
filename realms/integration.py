@@ -122,7 +122,8 @@ class OwnershipStore:
         if readonly:
             yield from self._snapshot()
             return
-        with _store_locks[self.path]:
+        from .selection_store import store_lock
+        with _store_locks[self.path], store_lock(self.path, shared=False):
             db = sqlite3.connect(self.path, timeout=30)
             try:
                 with db:
@@ -166,6 +167,22 @@ class OwnershipStore:
         identifiers = self.identifiers(values)
         if not values.get("session_id"):
             raise OwnerError("A trusted conversation identity is required")
+        if parent_session_id is None:
+            # Nearly every tool call re-binds aliases it already has. Answer
+            # that from a read so it never takes the store's write lock.
+            try:
+                with self.connection(readonly=True) as db:
+                    owners = {row[0] if row else None for kind, value in identifiers
+                              for row in [db.execute("SELECT owner FROM aliases WHERE kind=? AND value=?",
+                                                     (kind, value)).fetchone()]}
+                    if len(owners) == 1 and None not in owners:
+                        owner = next(iter(owners))
+                        if db.execute("SELECT 1 FROM owners WHERE id=?", (owner,)).fetchone():
+                            return owner
+            except ValueError:
+                # The snapshot refuses a hot journal left by a writer that died.
+                # The write path below recovers it, as every bind always has.
+                pass
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             parent_owner = None
