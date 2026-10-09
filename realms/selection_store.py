@@ -36,6 +36,11 @@ def store_lock(path, *, shared):
     meets another process's in-flight write. It is a flock on the store's
     directory: readers create nothing, and the kernel releases it when the
     holder dies.
+
+    A flock on the store file itself is a turnstile that every caller passes
+    through before taking the directory lock. A waiting writer keeps it closed,
+    so a steady stream of overlapping readers cannot starve it. (SQLite's own
+    locks are POSIX fcntl locks, which do not interact with flock on Linux.)
     """
     stores = _held.__dict__.setdefault("stores", {})
     key = os.path.abspath(os.path.dirname(path))
@@ -45,9 +50,24 @@ def store_lock(path, *, shared):
             raise RuntimeError("A store cannot be written while this thread is reading it")
         yield
         return
-    fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
+        gate = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        gate = None  # no store yet (or an unsafe one, which the snapshot refuses)
+    fd = None
+    try:
+        if gate is not None:
+            _acquire(gate, fcntl.LOCK_EX)
+        fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
         _acquire(fd, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+    except BaseException:
+        if fd is not None:
+            os.close(fd)
+        raise
+    finally:
+        if gate is not None:
+            os.close(gate)  # reopen the turnstile once this caller is through
+    try:
         stores[key] = (shared,)
         try:
             yield

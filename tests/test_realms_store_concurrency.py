@@ -92,7 +92,7 @@ def test_other_processes_starting_subagents_never_hold_an_allowed_conversation(s
         if result != "ran" or not calls:
             denied.append(result)
     writes = _finish(writers)
-    assert writes > 50 and reads > 50, (writes, reads)  # the two really overlapped
+    assert writes > 50 and reads > 20, (writes, reads)  # the two really overlapped
     assert denied == [], f"{len(denied)}/{reads} tool calls refused, first: {denied[0]}"
 
 
@@ -125,6 +125,61 @@ def test_unreadable_store_is_reported_as_such_not_as_a_permission_review(service
     assert "not a permission" in payload["error"]
     journal.unlink()
     assert _middleware(service, session_id="chat", task_id="chat-task")[0] == "ran"
+
+
+CRASHING_WRITER = """
+import os, sqlite3, sys
+db = sqlite3.connect(sys.argv[1], isolation_level=None)
+db.execute("BEGIN IMMEDIATE")
+db.execute("PRAGMA cache_size=1")   # spill pages so the rollback journal is really written
+for i in range(2000):
+    db.execute("INSERT INTO aliases(kind,value,owner) VALUES ('task_id', ?, 'half')", (f"x{i}" * 20,))
+os._exit(9)   # the process dies mid-transaction
+"""
+
+
+def test_a_writer_that_died_mid_transaction_is_rolled_back_by_the_next_session(service):
+    service.bind(session_origin="fresh", session_id="chat", task_id="chat-task")
+    subprocess.run([sys.executable, "-I", "-c", CRASHING_WRITER, str(service.owners.path)])
+    journal = Path(str(service.owners.path) + "-journal")
+    assert journal.exists()  # a real hot journal, not a fixture file
+    # The next writer recovers it, as before: session starts and new turns keep working.
+    assert service.bind(session_origin="fresh", session_id="next-chat", task_id="next-task") == "next-chat"
+    assert not journal.exists()
+    assert _middleware(service, session_id="chat", task_id="chat-task")[0] == "ran"
+    assert _middleware(service, session_id="chat", task_id="new-turn")[0] == "ran"
+    assert service.owners.resolve(task_id="x0" * 20, allow_missing=True) is None  # rolled back
+
+
+BUSY_READER = """
+import runpy, sys, time
+store = runpy.run_path(sys.argv[1])["load_runtime"]("integration").OwnershipStore(sys.argv[2])
+print("reading", flush=True)
+end = time.time() + float(sys.argv[3])
+while time.time() < end:   # back-to-back reads that always overlap each other
+    store.resolve(session_id="chat")
+    store.permission("chat")
+"""
+
+
+def test_a_new_session_is_not_starved_by_many_chats_reading(service):
+    service.bind(session_origin="fresh", session_id="chat", task_id="chat-task")
+    readers = [subprocess.Popen([sys.executable, "-I", "-c", BUSY_READER, BINDING, str(service.home), "12"],
+                                stdout=subprocess.PIPE, text=True) for _ in range(8)]
+    try:
+        for reader in readers:
+            assert reader.stdout.readline().strip() == "reading"
+        time.sleep(0.5)
+        waits = []
+        for index in range(5):
+            started = time.monotonic()
+            service.bind(session_origin="fresh", session_id=f"sub-{index}", parent_session_id="chat")
+            waits.append(time.monotonic() - started)
+        assert max(waits) < 1.0, [round(wait, 2) for wait in waits]
+    finally:
+        for reader in readers:
+            reader.kill()
+            reader.wait()
 
 
 def test_an_earlier_conversation_still_awaits_its_review(service):

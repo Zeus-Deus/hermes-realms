@@ -170,14 +170,19 @@ class OwnershipStore:
         if parent_session_id is None:
             # Nearly every tool call re-binds aliases it already has. Answer
             # that from a read so it never takes the store's write lock.
-            with self.connection(readonly=True) as db:
-                owners = {row[0] if row else None for kind, value in identifiers
-                          for row in [db.execute("SELECT owner FROM aliases WHERE kind=? AND value=?",
-                                                 (kind, value)).fetchone()]}
-                if len(owners) == 1 and None not in owners:
-                    owner = next(iter(owners))
-                    if db.execute("SELECT 1 FROM owners WHERE id=?", (owner,)).fetchone():
-                        return owner
+            try:
+                with self.connection(readonly=True) as db:
+                    owners = {row[0] if row else None for kind, value in identifiers
+                              for row in [db.execute("SELECT owner FROM aliases WHERE kind=? AND value=?",
+                                                     (kind, value)).fetchone()]}
+                    if len(owners) == 1 and None not in owners:
+                        owner = next(iter(owners))
+                        if db.execute("SELECT 1 FROM owners WHERE id=?", (owner,)).fetchone():
+                            return owner
+            except ValueError:
+                # The snapshot refuses a hot journal left by a writer that died.
+                # The write path below recovers it, as every bind always has.
+                pass
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             parent_owner = None
