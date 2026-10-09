@@ -99,8 +99,9 @@ def test_registered_dispatch_holds_legacy_despite_early_approve_and_failures(reg
         assert json.loads(model_tools.handle_function_call("permission_probe", {}, **identity))["error_code"] == "legacy_permission_review_required"
     # A session Realms never heard of is still held, but named honestly.
     assert json.loads(model_tools.handle_function_call("permission_probe", {}, session_id="missing"))["error_code"] == "realms_session_unbound"
+    # An unreadable store still refuses, but says so: it is not a permission review.
     monkeypatch.setattr(service.owners, "permission", lambda *a: (_ for _ in ()).throw(sqlite3.OperationalError("broken")))
-    assert json.loads(model_tools.handle_function_call("permission_probe", {}, session_id="off"))["error_code"] == "legacy_permission_review_required"
+    assert json.loads(model_tools.handle_function_call("permission_probe", {}, session_id="off"))["error_code"] == "realms_store_unavailable"
     assert len(effects) == 2
 
 
@@ -416,7 +417,8 @@ def test_corrupt_store_at_real_plugin_registration_cannot_drop_the_hold(tmp_path
     registry.register(name="permission_corrupt_probe", toolset="test", schema={"name":"permission_corrupt_probe","parameters":{"type":"object"}},
                       handler=lambda args, **kw: effects.append(True) or json.dumps({"executed":True}))
     result = json.loads(model_tools.handle_function_call("permission_corrupt_probe", {}, session_id="historical"))
-    assert result.get("error_code") == "legacy_permission_review_required", result
+    # Still held, and named for what it is: a damaged store, not a review to run.
+    assert result.get("error_code") == "realms_store_unavailable", result
     assert effects == []
     assert get_plugin_manager().has_middleware("tool_execution")
     assert (home / "realms/sessions.sqlite3").read_bytes() == b"invalid SQLite fixture"

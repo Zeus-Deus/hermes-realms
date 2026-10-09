@@ -1,6 +1,7 @@
 """Cold permission conversion, never compute adoption or data disposition."""
 import json
 from pathlib import Path
+import sqlite3
 
 from .integration import OwnerError
 
@@ -19,6 +20,13 @@ UNBOUND = (
     "Realms has no record of this conversation: its session start was not delivered "
     "to the plugin. Execution is paused; no host or guest operation was started. "
     "Start a new conversation or restart this backend."
+)
+
+UNREADABLE = (
+    "Realms could not read its permission store, so this tool call was not run; "
+    "no host or guest operation was started. This is not a permission review and "
+    "needs no /realm command. Retry the call. If it keeps failing, the store under "
+    "realms/ in this profile needs repair: report the cause. Cause: "
 )
 
 
@@ -40,6 +48,13 @@ def middleware(service, *, tool_name, args, next_call, session_id=None, task_id=
         state = service.owners.permission(owner)["state"]
         allowed = state in ("optional", "legacy-host") or tool_name in DISCOVERY or (
             tool_name == "realm" and args == {"action": "status"})
+    except OwnerError:
+        allowed = False
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        # Still fail closed, but an unreadable store says nothing about this
+        # conversation's permission: never ask the user to review it.
+        return json.dumps({"error": UNREADABLE + (str(exc) or type(exc).__name__) + ".",
+                           "error_code": "realms_store_unavailable"})
     except Exception:
         # Core middleware intentionally skips throwing plugins. Return the denial here.
         allowed = False

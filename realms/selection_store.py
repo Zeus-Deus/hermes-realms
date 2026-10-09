@@ -1,13 +1,72 @@
 """Non-mutating snapshots of the plugin's small rollback-journal stores."""
 from contextlib import contextmanager
+import fcntl  # windows-footgun: ok — runtime package rejects non-Linux hosts
 import os
 from pathlib import Path
 import sqlite3
 import stat
+import threading
+import time
+
+LOCK_TIMEOUT = 30.0
+_held = threading.local()
+
+
+def _acquire(fd, mode):
+    deadline = time.monotonic() + LOCK_TIMEOUT
+    delay = 0.001
+    while True:
+        try:
+            fcntl.flock(fd, mode | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Realms store stayed locked by another process") from None
+            time.sleep(delay)
+            delay = min(delay * 2, 0.01)
+
+
+@contextmanager
+def store_lock(path, *, shared):
+    """Cross-process reader/writer lock for one store, re-entrant per thread.
+
+    Every Hermes CLI chat and profile backend is its own process, and all of
+    them share these stores. Writers hold the lock exclusively for their whole
+    transaction and readers share it for their whole snapshot, so a reader never
+    meets another process's in-flight write. It is a flock on the store's
+    directory: readers create nothing, and the kernel releases it when the
+    holder dies.
+    """
+    stores = _held.__dict__.setdefault("stores", {})
+    key = os.path.abspath(os.path.dirname(path))
+    entry = stores.get(key)
+    if entry is not None:
+        if entry[0] and not shared:
+            raise RuntimeError("A store cannot be written while this thread is reading it")
+        yield
+        return
+    fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        _acquire(fd, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        stores[key] = (shared,)
+        try:
+            yield
+        finally:
+            del stores[key]
+    finally:
+        os.close(fd)  # releases the lock
 
 
 @contextmanager
 def read_snapshot(path, *, mode=None):
+    path = Path(path)
+    with store_lock(path, shared=True):
+        with _read_snapshot(path, mode=mode) as db:
+            yield db
+
+
+@contextmanager
+def _read_snapshot(path, *, mode=None):
     """Read the validated object, never let SQLite reopen its filename.
 
     These stores default to DELETE journaling. WAL/hot journals require an
