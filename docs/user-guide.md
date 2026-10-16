@@ -97,6 +97,24 @@ The link carries a random, single-realm ticket after `#`, so the ticket is never
 - **Default:** `view` sees `$SSH_CONNECTION` and prints the exact tunnel command, for example `ssh -N -L 40123:127.0.0.1:40123 you@host`. Run that on the device you connected from, then open the link there. Nothing is exposed beyond what your SSH login already grants.
 - **Tailscale:** `view --tailnet` binds this machine's own Tailscale address (`100.64.0.0/10` only) instead, so the link opens directly on your other tailnet devices. Traffic is WireGuard-encrypted, and only your tailnet can reach the port. The ticket is still required. `--port N` fixes the port if your tailnet ACLs need one.
 
+### In the `hermes chat` footer
+
+On a Hermes with plugin footer items, the classic CLI shows this conversation's Realm under the
+composer once one is requested or running, for example `◈ omarchy realm · live` (amber when you
+have control or a review is pending, dim when stopped or setting up), with one row per Realm. Press
+`Down` on an empty composer to select a row (or click it with `display.cli_mouse`):
+
+| Key | Action |
+|---|---|
+| `Enter` / click | Watch: open the browser viewer (the same link `/realm watch` makes). |
+| `v` | View here: the live screen inside the terminal, view-only; `q` or `Esc` returns to the chat, `u` shows the browser link. Kitty-graphics terminals (kitty, Ghostty, WezTerm) get pixels, others truecolour half-blocks. |
+| `s` | Screenshot (same as `/realm shot`); the footer shows the file path. |
+| `x` `x` | Stop the Realm and keep its workspace (press twice). |
+
+The footer is display only: nothing it shows reaches the conversation. It reads status at most
+every two seconds and never starts a desktop. Under `plugins.isolation: host` the terminal view is
+not offered.
+
 The legacy `default_mode` values now describe target availability, not the parent's execution environment. Explicit target failure never permits host-display fallback or bypassing human control, and existing approvals continue to apply.
 
 ## Legacy upgrade warning

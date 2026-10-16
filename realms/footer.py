@@ -1,0 +1,202 @@
+"""This conversation's Realm in the Hermes classic CLI live-work footer.
+
+Hermes polls ``snapshot`` about once a second off its render path (``ctx.register_footer_item``);
+the answer is cached here for two seconds so the footer never costs more than the desktop's own
+status refresh. Nothing here binds a conversation or starts a desktop: an owner Realms never saw,
+or one that has not asked for a desktop, shows nothing. Actions act only on this session's own
+realms, exactly like ``/realm watch|stop|shot``.
+"""
+
+import os
+import threading
+import time
+
+from .integration import OwnerError
+
+TTL = 2.0
+KIND_LABELS = {"realm": "realm", "omarchy-vm": "omarchy realm"}
+_IDENTITY = ("session_id", "stored_session_id", "hermes_home", "profile", "surface")
+
+
+def _identity(session):
+    return {key: session.get(key) for key in _IDENTITY if session.get(key)}
+
+
+def _short(realm_id):
+    return realm_id[:10] if isinstance(realm_id, str) else "?"
+
+
+def _detail(row):
+    if row.get("controlled"):
+        return "you have control"
+    if row.get("error") and row.get("state") != "live":
+        return " ".join(str(row["error"]).split())
+    parts = []
+    if row.get("size"):
+        parts.append(row["size"])
+    stats = row.get("stats") or {}
+    if stats.get("memory_bytes"):
+        parts.append(f"{stats['memory_bytes'] // (1024 * 1024)} MB")
+    elif row.get("memory_mb"):
+        parts.append(f"{row['memory_mb']} MB")
+    count = row.get("window_count")
+    if count is not None:
+        parts.append(f"{count} window" + ("" if count == 1 else "s"))
+    parts.append(row.get("state") or "unknown")
+    return " · ".join(parts)
+
+
+def describe(status, setup_job=None, *, terminal_view=True):
+    """The footer item for one owner's ``status()`` (plus its latest setup job), or None."""
+    rows = status.get("realms") or []
+    live = [row for row in rows if row.get("state") == "live"]
+    kind = (live[0]["kind"] if live else status.get("requested_kind") or status.get("kind") or "realm")
+    name = "◈ " + KIND_LABELS.get(kind, kind)
+    held = (status.get("permission") or {}).get("state", "optional") != "optional"
+    setting_up = bool(setup_job) and setup_job.get("state") in ("running", "cancelling")
+    if not live and not setting_up and (
+            not status.get("requested") or held and not rows or status.get("mode") == "host"):
+        return None
+    if held:
+        label, tone = name + " · review needed", "warn"
+    elif any(row.get("controlled") for row in live):
+        label, tone = name + " · you have control", "warn"
+    elif live:
+        label, tone = name + " · live", "ok"
+    elif setting_up:
+        label, tone = name + " · setting up", "dim"
+    elif any(row.get("error") for row in rows):
+        label, tone = name + " · needs attention", "warn"
+    elif rows:
+        label, tone = name + " · " + (rows[0].get("state") or "stopped"), "dim"
+    else:
+        setup = status.get("vm_setup") if kind == "omarchy-vm" else status.get("setup")
+        ready = (setup or {}).get("ready", True)
+        label, tone = name + (" · on" if ready else " · setup needed"), "dim" if ready else "warn"
+    items = [{"key": row["id"], "label": f"{KIND_LABELS.get(row.get('kind'), 'realm')} {_short(row['id'])}",
+              "detail": _detail(row)} for row in rows if isinstance(row.get("id"), str)]
+    if setting_up and not items:
+        items.append({"key": "setup", "label": "setup", "detail": (setup_job or {}).get("message") or "running"})
+    actions = []
+    if live and not held:
+        actions = [{"id": "watch", "label": "watch", "key": "enter"}]
+        if terminal_view:
+            actions.append({"id": "view", "label": "view here", "key": "v"})
+        actions += [{"id": "shot", "label": "shot", "key": "s"},
+                    {"id": "stop", "label": "stop", "key": "x", "confirm": True}]
+    return {"label": label, "tone": tone, "rows": items, "actions": actions}
+
+
+class FooterItem:
+    def __init__(self, service, *, ttl=TTL, clock=time.monotonic):
+        self.service = service
+        self.ttl = ttl
+        self._clock = clock
+        self._cache = {}
+        self._lock = threading.Lock()
+        # Under plugins.isolation: host this code runs in a process without the user's terminal.
+        self.terminal_view = os.environ.get("HERMES_PLUGIN_HOST_PROCESS") != "1"
+
+    def owner(self, session):
+        """The owner this session's ids already resolve to; never binds a new one."""
+        owners = self.service.owners
+        for field, value in (("session_id", session.get("session_id")),
+                             ("stored_session_id", session.get("stored_session_id")),
+                             ("session_id", session.get("stored_session_id"))):
+            if value:
+                owner = owners.resolve(allow_missing=True, **{field: value})
+                if owner is not None:
+                    return owner
+        return None
+
+    def snapshot(self, session):
+        key = (session.get("session_id"), session.get("stored_session_id"))
+        now = self._clock()
+        with self._lock:
+            cached = self._cache.get(key)
+            if cached is not None and now < cached[0]:
+                return cached[1]
+        value = self._read(session)
+        with self._lock:
+            self._cache = {key: (self._clock() + self.ttl, value)}
+        return value
+
+    def _read(self, session):
+        if session.get("hermes_home"):
+            from pathlib import Path
+            if Path(session["hermes_home"]).resolve() != self.service.home:
+                return None  # another profile's footer never shows this profile's realms
+        try:
+            owner = self.owner(session)
+        except OwnerError:
+            return None  # conflicting aliases: show nothing rather than guess
+        if owner is None:
+            return None
+        from . import setup_flow
+        status = self.service.status(owner)
+        try:
+            job = setup_flow.latest(self.service, owner)
+        except (OwnerError, PermissionError, ValueError, OSError):
+            job = None
+        return describe(status, job, terminal_view=self.terminal_view)
+
+    def forget(self):
+        with self._lock:
+            self._cache.clear()
+
+    def on_action(self, action_id, session, row_key):
+        try:
+            return self._act(action_id, session, row_key)
+        finally:
+            self.forget()  # the next poll shows what the action changed
+
+    def _act(self, action_id, session, row_key):
+        identity = _identity(session)
+        if action_id == "stop":
+            self.service.command("stop", **identity)
+            return {"notice": "Realm stopped; its workspace is kept"}
+        if action_id == "shot":
+            shot = self.service.command("shot", **identity)
+            return {"notice": f"Realm screenshot saved: {shot['path']}"}
+        if action_id not in ("watch", "view"):
+            raise ValueError(f"Unknown realm action {action_id!r}")
+        owner = self.service.bind(**identity)
+        record = next((r for r in self.service._running_records(owner) if r["id"] == row_key), None)
+        if record is None:
+            raise ValueError("Realm is not running")
+        if action_id == "watch":
+            return {"open_url": self.service.watch(owner, row_key)["url"], "notice": "Opening the Realm viewer"}
+        if not self.terminal_view:
+            raise ValueError("Viewing in this terminal needs plugins.isolation: in_process")
+        from .bridge import get_profile_viewer
+        return {"run_in_terminal": terminal_view(get_profile_viewer(self.service.home).start(), row_key)}
+
+
+def terminal_view(viewer, realm_id, **run_options):
+    """A blocking body that shows ``realm_id`` view-only in the real terminal until closed.
+
+    The ticket is view-only (the bridge drops input server-side) and ends with the view; the
+    header's browser link (``body.url``) shares it, so it stops working once the view closes.
+    ``run_options`` reach ``live_view.run`` (tests pass a pty and an environment).
+    """
+    from . import live_view
+
+    token = viewer.issue(realm_id, can_control=False, ttl=300)
+    url = f"{viewer.origin}/realms/{realm_id}/view#ticket={token}&view=1"
+    title = ("Omarchy VM " if realm_id.startswith("v-") else "Realm ") + realm_id
+
+    def body():
+        try:
+            client = live_view.RfbClient.connect(viewer.origin, realm_id, token)
+            try:
+                reason = live_view.run(client, title=title, browser_url=url,
+                                       keep_alive=lambda: viewer.renew(realm_id, token, ttl=300),
+                                       **run_options)
+            finally:
+                client.close()
+        finally:
+            viewer.tickets.discard(token)
+        return "Realm view closed" if reason == "closed" else f"Realm view ended: {reason}"
+
+    body.url = url
+    return body

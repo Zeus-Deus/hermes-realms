@@ -63,6 +63,12 @@ class Tickets:
             self._tickets[self._key(token)] = replace(ticket, expires=self._clock() + ttl)
             return True
 
+    def discard(self, token):
+        """End one capability (a closed terminal viewer) without touching other viewers."""
+        if isinstance(token, str):
+            with self._lock:
+                self._tickets.pop(self._key(token), None)
+
     def revoke(self, realm_id):
         with self._lock:
             self._tickets = {

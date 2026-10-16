@@ -141,6 +141,11 @@ def register(ctx):
     ctx.register_hook("on_session_identity", lambda **kw: continuation.capture_source(service, **kw))
     ctx.register_hook("on_session_idle", lambda **kw: continuation.deliver(service, **kw))
     ctx.on_unload(service.unload)
+    if hasattr(ctx, "register_footer_item"):
+        # Classic CLI footer: this chat's realm with watch / view / shot / stop keys. Hosts
+        # without the footer API simply skip it.
+        footer = _load_runtime("footer").FooterItem(service)
+        ctx.register_footer_item("realm", snapshot=footer.snapshot, on_action=footer.on_action)
     from tools.computer_use.targets import register_target_resolver
     from tools.terminal_targets import register_terminal_target_resolver
     service._target_disposers.append(register_target_resolver(
