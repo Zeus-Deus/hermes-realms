@@ -4,9 +4,7 @@ The item is discovered through real Hermes plugin discovery and painted by the r
 terminal viewer reads frames through the real ticket-checked, view-only ViewerServer from a
 private 0600 Unix RFB source (no compositor or VM is started).
 """
-import json
 import os
-from pathlib import Path
 import pty
 import runpy
 from types import SimpleNamespace
@@ -72,7 +70,10 @@ def test_footer_shows_only_this_sessions_requested_or_live_realm(tmp_path, monke
 def test_enter_opens_the_realm_where_it_draws_best_and_the_other_place_stays_one_key_away():
     describe = load("footer").describe
     status = {"requested": True, "realms": [{"id": LIVE, "kind": "realm", "state": "live"}]}
-    keys = lambda **kw: {a["id"]: a["key"] for a in describe(status, **kw)["actions"]}
+
+    def keys(**kw):
+        return {a["id"]: a["key"] for a in describe(status, **kw)["actions"]}
+
     assert keys(terminal_view=True, pixels=True) == {"view": "enter", "watch": "b", "shot": "s", "stop": "x"}
     assert keys(terminal_view=True, pixels=False) == {"watch": "enter", "view": "v", "shot": "s", "stop": "x"}
     # No terminal to draw in (plugin host process): Enter is the browser and there is no view.
@@ -92,6 +93,27 @@ def test_human_control_and_stopped_realms_change_tone_and_drop_live_actions(tmp_
     item = footer.snapshot({"session_id": "mine"})
     assert item["tone"] == "dim" and item["label"] == "◈ realm · stopped" and item["actions"] == []
 
+
+def test_badge_names_only_the_states_worth_a_glance():
+    """The status-bar badge: live, control and a pending review; nothing for quieter states."""
+    describe = load("footer").describe
+    live = {"id": LIVE, "kind": "omarchy-vm", "state": "live"}
+
+    def badge(status):
+        return (describe(status) or {}).get("badge")
+
+    assert badge({"requested": True, "realms": [live]}) == "◈ live"
+    assert badge({"requested": True, "realms": [{**live, "controlled": True}]}) == "◈ control"
+    assert badge({"requested": True, "permission": {"state": "legacy-pending"},
+                  "realms": [{**live, "error": "Legacy work"}]}) == "◈ review"
+    for quiet in ({"requested": True, "realms": []},
+                  {"requested": True, "realms": [{**live, "state": "stopped"}]},
+                  {"requested": True, "realms": [{**live, "state": "recovery-required", "error": "x"}]}):
+        item = describe(quiet)
+        assert item is not None and "badge" not in item
+    for status in ({"requested": True, "realms": [live]},
+                   {"requested": True, "realms": [{**live, "controlled": True}]}):
+        assert len(badge(status)) <= 12
 
 def test_snapshot_is_cached_between_polls(tmp_path, monkeypatch):
     service = _service(tmp_path, monkeypatch)
@@ -157,6 +179,8 @@ def test_real_discovery_paints_the_realm_in_the_hermes_footer(tmp_path, monkeypa
         monitor.refresh()
         return "◈ realm · live" in monitor.dock_text(columns=120, rows=30)
     wait_until(painted, what="realm in the footer")
+    # Hosts that paint a status-bar badge get it with the item; older ones ignore the key.
+    assert get_plugin_footer_items()[0]["snapshot"]({"session_id": "cli-session"}).get("badge") == "◈ live"
     text = monitor.dock_text(columns=120, rows=30)
     assert "realm " + LIVE[:10] in text and "1280x800 · 2 windows" in text
     assert [r["row_key"] for r in monitor.roster if r["kind"] == "plugin"] == [LIVE]
@@ -179,7 +203,9 @@ def test_terminal_view_shows_frames_through_the_view_only_bridge_and_ends_its_ti
     server.start()
     controller, terminal = pty.openpty()
     try:
-        import fcntl, struct, termios
+        import fcntl
+        import struct
+        import termios
         fcntl.ioctl(terminal, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         stream = os.fdopen(terminal, "r+b", buffering=0, closefd=False)
         body = load("footer").terminal_view(server, LIVE, stdin=stream, stdout=stream,

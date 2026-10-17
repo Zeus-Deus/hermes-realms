@@ -53,6 +53,12 @@ The compact session UI offers setup when needed, then Watch and a management men
 | `/realm off` | Disable agent target use while retaining the target and human viewing. It does not switch ordinary tools back to a host route; they never left it. |
 | `/realm stop` | End owned compute while retaining modern workspace data. This is not Delete. |
 
+`/realm on`, `off`, `status`, `stop` and `size` answer with one line, for example
+`Realm on · omarchy realm · live (1 window)`, `Realm off`, or
+`Realm: setup needed — run hermes realms doctor`. Add `--json` (for example `/realm status --json`)
+for the full status object. The agent's `realm` tool always gets that JSON; the one-line answer
+is only for a person typing the command.
+
 Explicit Disable survives backend restarts and cannot be silently reversed by the agent's `on` action. Re-enable manually with `/realm on` or the existing desktop setup review. An unset session preference is not a manual Disable: the agent can still select a target when a test needs it. Normal coding and human viewing remain available while disabled.
 
 Watch and Pop out do not grant input. Human takeover excludes agent inspection/input on that target; an interrupted connection is not handback. Unrelated parent work remains available. Closing a viewer is not a request to stop or delete its target. Remote Watch/Pop out requires an explicit viewer tunnel, not a backend loopback URL.
@@ -110,6 +116,11 @@ have control or a review is pending, dim when stopped or setting up), with one r
 | `b` / `v` | The other place: `b` opens the browser from a kitty-graphics terminal; `v` shows the in-terminal view (truecolour half-blocks) from any other terminal. |
 | `s` | Screenshot (same as `/realm shot`); the footer shows the file path. |
 | `x` `x` | Stop the Realm and keep its workspace (press twice). |
+
+On a Hermes whose status bar shows plugin badges, the bar also carries a short read-only glyph
+while it matters: `◈ live`, `◈ control` when you have taken over, or `◈ review` when the chat
+needs `/realm review`. It hides on narrow terminals like the other optional segments; the row and
+its keys stay in the footer. Older Hermes ignores the badge.
 
 The footer is display only: nothing it shows reaches the conversation. It reads status at most
 every two seconds and never starts a desktop. Under `plugins.isolation: host` the terminal view is

@@ -12,9 +12,9 @@ import threading
 import time
 
 from .integration import OwnerError
+from .status_text import KIND_LABELS
 
 TTL = 2.0
-KIND_LABELS = {"realm": "realm", "omarchy-vm": "omarchy realm"}
 _IDENTITY = ("session_id", "stored_session_id", "hermes_home", "profile", "surface")
 
 
@@ -67,12 +67,13 @@ def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
     if not live and not setting_up and (
             not status.get("requested") or held and not rows or status.get("mode") == "host"):
         return None
+    badge = None  # the status-bar glyph: only the states worth a glance from anywhere
     if held:
-        label, tone = name + " · review needed", "warn"
+        label, tone, badge = name + " · review needed", "warn", "◈ review"
     elif any(row.get("controlled") for row in live):
-        label, tone = name + " · you have control", "warn"
+        label, tone, badge = name + " · you have control", "warn", "◈ control"
     elif live:
-        label, tone = name + " · live", "ok"
+        label, tone, badge = name + " · live", "ok", "◈ live"
     elif setting_up:
         label, tone = name + " · setting up", "dim"
     elif any(row.get("error") for row in rows):
@@ -88,7 +89,10 @@ def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
     if setting_up and not items:
         items.append({"key": "setup", "label": "setup", "detail": (setup_job or {}).get("message") or "running"})
     actions = _live_actions(terminal_view, pixels) if live and not held else []
-    return {"label": label, "tone": tone, "rows": items, "actions": actions}
+    item = {"label": label, "tone": tone, "rows": items, "actions": actions}
+    if badge:
+        item["badge"] = badge  # read-only status-bar segment; older Hermes ignores the key
+    return item
 
 
 class FooterItem:
