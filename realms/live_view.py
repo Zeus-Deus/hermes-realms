@@ -9,6 +9,7 @@ the terminal's pixel size. Everything else gets truecolour half-blocks.
 """
 
 import base64
+import inspect
 import os
 import select
 import struct
@@ -43,8 +44,11 @@ class RfbClient:
         from websockets.typing import Subprotocol
 
         url = origin.replace("http:", "ws:", 1) + f"/api/realms/{realm_id}/vnc"
+        # websockets 15 honours proxy environment variables unless told not to; 14 has no proxy
+        # support (and no such keyword), so it already connects straight to the loopback viewer.
+        direct = {"proxy": None} if "proxy" in inspect.signature(connect).parameters else {}
         try:
-            ws = connect(url, origin=origin, compression=None, proxy=None, max_size=None,
+            ws = connect(url, origin=origin, compression=None, max_size=None, **direct,
                          open_timeout=timeout,
                          subprotocols=[Subprotocol("binary"), Subprotocol("realm." + token)])
         except (InvalidHandshake, InvalidStatus, OSError) as exc:
@@ -161,7 +165,11 @@ class RfbClient:
         if max(sx, x) + w > self.width or max(sy, y) + h > self.height:
             raise ViewerError("RFB copy outside the screen")
         stride, span = self.width * 4, w * 4
-        rows = [bytes(self.framebuffer[(sy + r) * stride + sx * 4:][:span]) for r in range(h)]
+        # Snapshot the source rows first so overlapping copies (scrolling) read the old pixels.
+        rows = []
+        for r in range(h):
+            start = (sy + r) * stride + sx * 4
+            rows.append(bytes(self.framebuffer[start:start + span]))
         for r, data in enumerate(rows):
             start = (y + r) * stride + x * 4
             self.framebuffer[start:start + span] = data

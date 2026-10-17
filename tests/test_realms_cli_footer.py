@@ -151,6 +151,34 @@ def test_actions_act_only_on_this_sessions_realm(tmp_path, monkeypatch):
         footer.on_action("delete-everything", {"session_id": "mine"}, LIVE)
 
 
+def test_actions_on_a_retained_stopped_row_never_reach_the_live_realm(tmp_path, monkeypatch):
+    """The item's actions show on every row; a stopped row's x x / s must not hit the live VM."""
+    service = _service(tmp_path, monkeypatch)
+    footer = load("footer").FooterItem(service, ttl=0)
+    owner = service.bind(session_origin="fresh", session_id="mine")
+    service.owners.set_kind(owner, "omarchy-vm")
+    retained = {"id": LIVE, "generation": "g" * 32, "session_id": owner, "status": "stopped",
+                "size": "1280x800", "home": str(service.home)}
+    vm = {"id": "v-" + "d" * 24, "generation": "h" * 32, "session_id": owner, "status": "running"}
+    monkeypatch.setattr(service, "records", lambda who: [retained] if who == owner else [])
+    monkeypatch.setattr(service, "vm_records", lambda who: [vm] if who == owner else [])
+    stopped, shots = [], []
+    monkeypatch.setattr(service, "stop", lambda o: stopped.append(o))
+    monkeypatch.setitem(type(service)._COMMANDS, "shot", lambda self, o, args, identity: shots.append(o) or {
+        "realm_id": vm["id"], "path": "/realm/screen.png"})
+    session = {"session_id": "mine"}
+    for action in ("stop", "shot", "watch", "view"):
+        with pytest.raises(ValueError, match="not running"):
+            footer.on_action(action, session, retained["id"])
+        with pytest.raises(ValueError, match="not running"):
+            footer.on_action(action, session, "v-" + "e" * 24)  # nothing this chat owns
+    assert stopped == [] and shots == []
+    # The live row itself still works.
+    assert "stopped" in footer.on_action("stop", session, vm["id"])["notice"]
+    assert footer.on_action("shot", session, vm["id"])["notice"].endswith("/realm/screen.png")
+    assert stopped == [owner] and shots == [owner]
+
+
 def test_real_discovery_paints_the_realm_in_the_hermes_footer(tmp_path, monkeypatch):
     """Discovered as a user plugin, the item reaches the real footer for this CLI session."""
     from hermes_cli.plugins import discover_plugins, get_plugin_footer_items, get_plugin_manager

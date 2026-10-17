@@ -67,6 +67,12 @@ def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
     if not live and not setting_up and (
             not status.get("requested") or held and not rows or status.get("mode") == "host"):
         return None
+    # Readiness belongs to the kind this chat asked for, not to a retained row of another kind.
+    requested = status.get("requested_kind") or status.get("kind") or "realm"
+    setup = status.get("vm_setup") if requested == "omarchy-vm" else status.get("setup")
+    ready = (setup or {}).get("ready", True)
+    if not live and not ready:
+        name = "◈ " + KIND_LABELS.get(requested, requested)
     badge = None  # the status-bar glyph: only the states worth a glance from anywhere
     if held:
         label, tone, badge = name + " · review needed", "warn", "◈ review"
@@ -76,14 +82,14 @@ def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
         label, tone, badge = name + " · live", "ok", "◈ live"
     elif setting_up:
         label, tone = name + " · setting up", "dim"
+    elif not ready:
+        label, tone = name + " · setup needed", "warn"
     elif any(row.get("error") for row in rows):
         label, tone = name + " · needs attention", "warn"
     elif rows:
         label, tone = name + " · " + (rows[0].get("state") or "stopped"), "dim"
     else:
-        setup = status.get("vm_setup") if kind == "omarchy-vm" else status.get("setup")
-        ready = (setup or {}).get("ready", True)
-        label, tone = name + (" · on" if ready else " · setup needed"), "dim" if ready else "warn"
+        label, tone = name + " · on", "dim"
     items = [{"key": row["id"], "label": f"{KIND_LABELS.get(row.get('kind'), 'realm')} {_short(row['id'])}",
               "detail": _detail(row)} for row in rows if isinstance(row.get("id"), str)]
     if setting_up and not items:
@@ -161,19 +167,20 @@ class FooterItem:
             self.forget()  # the next poll shows what the action changed
 
     def _act(self, action_id, session, row_key):
+        if action_id not in ("watch", "view", "shot", "stop"):
+            raise ValueError(f"Unknown realm action {action_id!r}")
         identity = _identity(session)
+        owner = self.service.bind(**identity)
+        # Every row carries the item's actions; only the selected row's own live realm is a target,
+        # so a retained stopped row never stops or captures the realm that replaced it.
+        if not any(r["id"] == row_key for r in self.service._running_records(owner)):
+            raise ValueError("Realm is not running")
         if action_id == "stop":
-            self.service.command("stop", **identity)
+            self.service.stop(owner)
             return {"notice": "Realm stopped; its workspace is kept"}
         if action_id == "shot":
             shot = self.service.command("shot", **identity)
             return {"notice": f"Realm screenshot saved: {shot['path']}"}
-        if action_id not in ("watch", "view"):
-            raise ValueError(f"Unknown realm action {action_id!r}")
-        owner = self.service.bind(**identity)
-        record = next((r for r in self.service._running_records(owner) if r["id"] == row_key), None)
-        if record is None:
-            raise ValueError("Realm is not running")
         if action_id == "watch":
             return {"open_url": self.service.watch(owner, row_key)["url"], "notice": "Opening the Realm viewer"}
         if not self.terminal_view:

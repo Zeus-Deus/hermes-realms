@@ -113,3 +113,23 @@ def test_commands_with_their_own_results_answer_as_before(realm):
     # watch/shot/push/pull/review/repair return their own data (a URL, a path), never a status line.
     result = json.loads(realm.slash("watch"))
     assert result == {"error": "Realm is not running"}
+
+
+def test_status_names_the_requested_kinds_setup_over_a_retained_realm(realm, monkeypatch):
+    """Stop a regular Realm, then ask for an unprepared VM: the line names the VM's setup step."""
+    realm.slash("on")
+    realm.go_live()
+    realm.slash("stop")
+    owner = realm.service.bind(session_id="cli-chat")
+    retained = {"id": LIVE, "generation": "g" * 32, "session_id": owner, "status": "stopped",
+                "size": "1280x800", "home": str(realm.service.home)}
+    monkeypatch.setattr(realm.service.manager, "list", lambda: [retained])
+    monkeypatch.setattr(load("integration"), "vm_setup_status", lambda *args: {
+        "ready": False, "message": "Omarchy VM setup required. Then run hermes realms vm doctor."})
+    assert realm.slash("on omarchy").startswith("Realm: ")
+    assert realm.slash("status") == "Realm: setup needed — run hermes realms vm doctor"
+    # The footer agrees instead of showing the retained row's state under the VM's name.
+    from hermes_cli.plugins import get_plugin_footer_items
+    item = get_plugin_footer_items()[0]["snapshot"]({"session_id": "cli-chat"})
+    assert item["label"] == "◈ omarchy realm · setup needed" and item["tone"] == "warn"
+    assert item["actions"] == []

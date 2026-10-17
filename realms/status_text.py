@@ -63,9 +63,11 @@ def summary(status):
         return "Realm off" + (f" · {name} still running, the agent won't use it" if live else "")
     if not status.get("requested"):
         return "Realm available · none yet; the agent starts one when a test needs it"
-    setup = status.get("vm_setup") if kind == "omarchy-vm" else status.get("setup")
+    # Readiness belongs to the kind this chat asked for, not to a retained row of another kind.
+    requested = status.get("requested_kind") or status.get("kind") or "realm"
+    setup = status.get("vm_setup") if requested == "omarchy-vm" else status.get("setup")
     if not live and not (setup or {}).get("ready", True):
-        return f"Realm: setup needed — run {_DOCTOR.get(kind, _DOCTOR['realm'])}"
+        return f"Realm: setup needed — run {_DOCTOR.get(requested, _DOCTOR['realm'])}"
     if shown is None:
         return f"Realm on · {name} · starts when needed"
     more = f" (+{len(rows) - 1} more)" if len(rows) > 1 else ""

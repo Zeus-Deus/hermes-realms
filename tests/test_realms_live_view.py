@@ -158,6 +158,50 @@ def test_client_is_refused_without_a_valid_ticket(bridge):
         live.RfbClient.connect(server.origin, record["id"], "not-a-ticket")
 
 
+def test_client_connects_with_websockets_14_which_has_no_proxy_option(bridge, monkeypatch):
+    """The manifest allows websockets 14, whose ``connect`` has no ``proxy`` keyword."""
+    import inspect
+    import websockets.sync.client as ws_client
+
+    real = ws_client.connect
+
+    def connect_14(uri, *, origin=None, compression="deflate", max_size=2**20, open_timeout=10,
+                   subprotocols=None):
+        return real(uri, origin=origin, compression=compression, max_size=max_size,
+                    open_timeout=open_timeout, subprotocols=subprotocols)
+
+    assert "proxy" not in inspect.signature(connect_14).parameters
+    monkeypatch.setattr(ws_client, "connect", connect_14)
+    server, record, _ = bridge
+    live = load("live_view")
+    client = live.RfbClient.connect(server.origin, record["id"],
+                                    server.issue(record["id"], can_control=False, ttl=60))
+    try:
+        deadline = time.monotonic() + 5
+        while not client.poll(timeout=0.2):
+            assert time.monotonic() < deadline, "no frame arrived"
+        assert client.rgb() == bytes(c for pixel in PIXELS for c in pixel)
+    finally:
+        client.close()
+
+
+def test_copyrect_moves_overlapping_rows_like_a_scroll():
+    """CopyRect within the screen: overlapping source and destination copy the source as it was."""
+    live = load("live_view")
+    client = live.RfbClient(ws=None)
+    client.width, client.height = 3, 4
+    client.framebuffer = bytearray(b"".join(bytes((r, c, 0, 0)) for r in range(4) for c in range(3)))
+    client._copy(0, 0, 0, 1, 3, 3)  # scroll down one row
+    rows = [bytes(client.framebuffer[r * 12:(r + 1) * 12]) for r in range(4)]
+    expected = [b"".join(bytes((r, c, 0, 0)) for c in range(3)) for r in (0, 0, 1, 2)]
+    assert rows == expected
+    client._copy(1, 1, 0, 0, 2, 2)  # a sub-rectangle, up and left
+    assert bytes(client.framebuffer[0:8]) == expected[1][4:12]
+    assert bytes(client.framebuffer[12:20]) == expected[2][4:12]
+    with pytest.raises(live.ViewerError):
+        client._copy(2, 0, 0, 0, 2, 1)  # source runs off the right edge
+
+
 def test_kitty_frame_carries_the_exact_pixels_and_fits_the_cells():
     live = load("live_view")
     rgb = bytes(c for pixel in PIXELS for c in pixel)
