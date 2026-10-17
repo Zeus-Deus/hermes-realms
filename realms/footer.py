@@ -46,7 +46,17 @@ def _detail(row):
     return " · ".join(parts)
 
 
-def describe(status, setup_job=None, *, terminal_view=True):
+def _live_actions(terminal_view, pixels):
+    """Enter shows the realm where it looks best: in this terminal when it draws real pixels
+    (kitty graphics), else in the browser. The other place stays one key away."""
+    watch = {"id": "watch", "label": "browser" if pixels else "watch", "key": "b" if pixels else "enter"}
+    view = {"id": "view", "label": "view" if pixels else "view here", "key": "enter" if pixels else "v"}
+    lead = [view, watch] if terminal_view and pixels else [watch] + ([view] if terminal_view else [])
+    return lead + [{"id": "shot", "label": "shot", "key": "s"},
+                   {"id": "stop", "label": "stop", "key": "x", "confirm": True}]
+
+
+def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
     """The footer item for one owner's ``status()`` (plus its latest setup job), or None."""
     rows = status.get("realms") or []
     live = [row for row in rows if row.get("state") == "live"]
@@ -77,13 +87,7 @@ def describe(status, setup_job=None, *, terminal_view=True):
               "detail": _detail(row)} for row in rows if isinstance(row.get("id"), str)]
     if setting_up and not items:
         items.append({"key": "setup", "label": "setup", "detail": (setup_job or {}).get("message") or "running"})
-    actions = []
-    if live and not held:
-        actions = [{"id": "watch", "label": "watch", "key": "enter"}]
-        if terminal_view:
-            actions.append({"id": "view", "label": "view here", "key": "v"})
-        actions += [{"id": "shot", "label": "shot", "key": "s"},
-                    {"id": "stop", "label": "stop", "key": "x", "confirm": True}]
+    actions = _live_actions(terminal_view, pixels) if live and not held else []
     return {"label": label, "tone": tone, "rows": items, "actions": actions}
 
 
@@ -96,6 +100,8 @@ class FooterItem:
         self._lock = threading.Lock()
         # Under plugins.isolation: host this code runs in a process without the user's terminal.
         self.terminal_view = os.environ.get("HERMES_PLUGIN_HOST_PROCESS") != "1"
+        from .live_view import graphics_mode
+        self.pixels = self.terminal_view and graphics_mode() == "pixels"
 
     def owner(self, session):
         """The owner this session's ids already resolve to; never binds a new one."""
@@ -138,7 +144,7 @@ class FooterItem:
             job = setup_flow.latest(self.service, owner)
         except (OwnerError, PermissionError, ValueError, OSError):
             job = None
-        return describe(status, job, terminal_view=self.terminal_view)
+        return describe(status, job, terminal_view=self.terminal_view, pixels=self.pixels)
 
     def forget(self):
         with self._lock:

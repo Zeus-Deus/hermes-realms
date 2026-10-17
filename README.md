@@ -28,7 +28,7 @@ Manual controls, if you want them:
 | `/realm pull GUEST_PATH LOCAL_PATH` | Copy a file or folder out of the Omarchy VM. |
 | `hermes realms list` / `hermes realms vm list` | Table of Realms in this profile, running first (`--json` for scripts). |
 | `hermes realms view [ID]` | Print a private link to a running Realm's or VM's live screen, view-only. Works over SSH (it prints the `ssh -L` command) or `--tailnet`. See [From a terminal](docs/user-guide.md#from-a-terminal). |
-| `hermes chat` footer | The running Realm under the composer: `Down` to select, `Enter` watch, `v` view in the terminal, `s` shot, `x x` stop. See [In the footer](docs/user-guide.md#in-the-hermes-chat-footer). |
+| `hermes chat` footer | The running Realm under the composer: `Down` to select, `Enter` shows it (in the terminal on kitty-graphics terminals, else the browser), `b`/`v` the other place, `s` shot, `x x` stop. See [In the footer](docs/user-guide.md#in-the-hermes-chat-footer). |
 | **Delete workspace…** in the ⋯ menu | Permanently delete a stopped Realm's retained workspace (Desktop app). |
 
 ## Install

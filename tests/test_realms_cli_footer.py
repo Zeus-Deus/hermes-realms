@@ -69,6 +69,16 @@ def test_footer_shows_only_this_sessions_requested_or_live_realm(tmp_path, monke
     assert footer.snapshot({**session, "hermes_home": str(tmp_path / "elsewhere")}) is None
 
 
+def test_enter_opens_the_realm_where_it_draws_best_and_the_other_place_stays_one_key_away():
+    describe = load("footer").describe
+    status = {"requested": True, "realms": [{"id": LIVE, "kind": "realm", "state": "live"}]}
+    keys = lambda **kw: {a["id"]: a["key"] for a in describe(status, **kw)["actions"]}
+    assert keys(terminal_view=True, pixels=True) == {"view": "enter", "watch": "b", "shot": "s", "stop": "x"}
+    assert keys(terminal_view=True, pixels=False) == {"watch": "enter", "view": "v", "shot": "s", "stop": "x"}
+    # No terminal to draw in (plugin host process): Enter is the browser and there is no view.
+    assert keys(terminal_view=False, pixels=False) == {"watch": "enter", "shot": "s", "stop": "x"}
+
+
 def test_human_control_and_stopped_realms_change_tone_and_drop_live_actions(tmp_path, monkeypatch):
     service = _service(tmp_path, monkeypatch)
     footer = load("footer").FooterItem(service, ttl=0)
