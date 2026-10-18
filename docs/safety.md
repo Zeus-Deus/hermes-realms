@@ -151,8 +151,21 @@ normally, as does a conversation the store has never seen (it cannot be in a
 Realm). A call without a conversation identity is paused while any
 conversation uses a Realm or is held. If the ownership store itself cannot be read, no
 conversation can be told apart and every tool is paused with
-`legacy_permission_review_required`, as before. The `realm` tool and `/realm`
-commands report the same error.
+`realms_store_unavailable`. The `realm` tool and `/realm` commands report the
+same error.
+
+## Concurrent access to the stores
+Every Hermes CLI chat and profile backend is a separate process, and all of
+them share the profile's ownership and viewer-authority stores. Readers take a
+shared and writers an exclusive `flock` on the store's directory, so a read
+never meets another process's in-flight write; a turnstile `flock` on the
+store file keeps a waiting writer from being starved by overlapping readers.
+A tool call whose identifiers are already recorded only reads. A store that
+still cannot be read (a leftover journal, corruption, unsafe ownership) is
+reported as `realms_store_unavailable`, never as a permission review, and
+nothing runs. The next write rolls back a journal left by a writer that died,
+as SQLite always does. `legacy_permission_review_required` means only that the
+conversation itself still awaits `/realm review`.
 
 For modern sessions, stop owned compute before disabling the runtime and restarting its backend. Disabling the UI alone changes no backend authority. Retained profile data and the explicitly installed driver are not implicitly deleted.
 

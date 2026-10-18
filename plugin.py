@@ -88,7 +88,7 @@ def _register_degraded(ctx, exc):
         def respond(*args, **identity):
             return json.dumps({
                 "error": "Realm permission storage is unavailable. Execution is paused; recover the original ownership store and reopen this backend. No guest was changed. Realms could not load: " + (str(exc) or type(exc).__name__) + ".",
-                "error_code": "legacy_permission_review_required",
+                "error_code": "realms_store_unavailable",
             })
     ctx.register_middleware("tool_execution", middleware)
     ctx.register_tool("realm", "realms", SCHEMA, respond, check_fn=lambda: sys.platform == "linux")

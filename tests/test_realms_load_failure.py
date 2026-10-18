@@ -172,8 +172,9 @@ def test_unreadable_store_with_missing_dependency_still_pauses_everything(tmp_pa
     effects = []
     _probe(effects)
     result = json.loads(model_tools.handle_function_call("load_failure_probe", {}, session_id="plain"))
-    assert result["error_code"] == "legacy_permission_review_required"
+    assert result["error_code"] == "realms_store_unavailable"
     assert "permission storage is unavailable" in result["error"]
+    assert "/realm review" not in result["error"]
     assert effects == []
     status = json.loads(get_plugin_command_handler("realm")("status", session_id="plain"))
     assert "permission storage is unavailable" in status["error"]
