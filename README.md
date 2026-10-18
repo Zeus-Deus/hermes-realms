@@ -21,13 +21,14 @@ Manual controls, if you want them:
 | `/realm off` | Stop the agent from using a Realm. The desktop and your view of it stay. |
 | `/realm stop` | Shut the Realm down and keep its workspace. Stopped VM workspaces expire after 14 unused days by default. |
 | `/realm watch` | Open a view-only window onto the running Realm. |
-| `/realm status` | Show the kind, whether it is running, and setup state. |
+| `/realm status` | One line: the kind, whether it is running, and what to run if setup is missing (`Realm on · omarchy realm · live (1 window)`). `--json` prints the full status. |
 | `/realm repair` | Reset the agent's GUI-control connection to a running Realm. |
 | `/realm review` | Let an earlier chat run tools again after the upgrade (asks first). `/realm review unused` does this for every earlier chat that never used a Realm. |
 | `/realm push SOURCE [GUEST_PATH]` | Copy a file or folder into the Omarchy VM. |
 | `/realm pull GUEST_PATH LOCAL_PATH` | Copy a file or folder out of the Omarchy VM. |
 | `hermes realms list` / `hermes realms vm list` | Table of Realms in this profile, running first (`--json` for scripts). |
 | `hermes realms view [ID]` | Print a private link to a running Realm's or VM's live screen, view-only. Works over SSH (it prints the `ssh -L` command) or `--tailnet`. See [From a terminal](docs/user-guide.md#from-a-terminal). |
+| `hermes chat` footer | The running Realm under the composer: `Down` to select, `Enter` shows it (in the terminal on kitty-graphics terminals, else the browser), `b`/`v` the other place, `s` shot, `x x` stop. The status bar shows `◈ live` / `◈ control` / `◈ review` where Hermes supports plugin badges. See [In the footer](docs/user-guide.md#in-the-hermes-chat-footer). |
 | **Delete workspace…** in the ⋯ menu | Permanently delete a stopped Realm's retained workspace (Desktop app). |
 
 ## Install

@@ -107,22 +107,29 @@ def register(ctx):
         _register_degraded(ctx, exc)
         return
 
-    def command(raw, **identity):
+    def run(raw, identity):
         try:
-            return json.dumps(service.command(raw, **identity))
+            return service.command(raw, **identity)
         except Exception as exc:
-            return json.dumps(
-                {
-                    "error": str(exc)
-                    if isinstance(exc, (ValueError, PermissionError, SessionExecutionError))
-                    else "Realm operation failed; host fallback is disabled."
-                }
-            )
+            return {
+                "error": str(exc)
+                if isinstance(exc, (ValueError, PermissionError, SessionExecutionError))
+                else "Realm operation failed; host fallback is disabled."
+            }
+
+    status_text = _load_runtime("status_text")
+
+    def command(raw, **identity):
+        # A person reads one line for on/off/status/stop/size; --json (and every other action)
+        # answers with the same JSON the realm tool returns.
+        human, raw = status_text.slash_request(raw)
+        result = run(raw, identity)
+        return status_text.render(result) if human else json.dumps(result)
 
     def tool(args, **identity):
         # Caller metadata and tool arguments cannot impersonate manual reenable.
         identity["_agent"] = True
-        return command(_raw_command(args), **identity)
+        return json.dumps(run(_raw_command(args), identity))
 
     # A missing optional driver must not hide its own management/setup tools.
     ctx.register_tool("realm", "realms", SCHEMA, tool, check_fn=lambda: sys.platform == "linux")
@@ -141,6 +148,11 @@ def register(ctx):
     ctx.register_hook("on_session_identity", lambda **kw: continuation.capture_source(service, **kw))
     ctx.register_hook("on_session_idle", lambda **kw: continuation.deliver(service, **kw))
     ctx.on_unload(service.unload)
+    if hasattr(ctx, "register_footer_item"):
+        # Classic CLI footer: this chat's realm with watch / view / shot / stop keys. Hosts
+        # without the footer API simply skip it.
+        footer = _load_runtime("footer").FooterItem(service)
+        ctx.register_footer_item("realm", snapshot=footer.snapshot, on_action=footer.on_action)
     from tools.computer_use.targets import register_target_resolver
     from tools.terminal_targets import register_terminal_target_resolver
     service._target_disposers.append(register_target_resolver(

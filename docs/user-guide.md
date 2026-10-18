@@ -53,6 +53,12 @@ The compact session UI offers setup when needed, then Watch and a management men
 | `/realm off` | Disable agent target use while retaining the target and human viewing. It does not switch ordinary tools back to a host route; they never left it. |
 | `/realm stop` | End owned compute while retaining modern workspace data. This is not Delete. |
 
+`/realm on`, `off`, `status`, `stop` and `size` answer with one line, for example
+`Realm on · omarchy realm · live (1 window)`, `Realm off`, or
+`Realm: setup needed — run hermes realms doctor`. Add `--json` (for example `/realm status --json`)
+for the full status object. The agent's `realm` tool always gets that JSON; the one-line answer
+is only for a person typing the command.
+
 Explicit Disable survives backend restarts and cannot be silently reversed by the agent's `on` action. Re-enable manually with `/realm on` or the existing desktop setup review. An unset session preference is not a manual Disable: the agent can still select a target when a test needs it. Normal coding and human viewing remain available while disabled.
 
 Watch and Pop out do not grant input. Human takeover excludes agent inspection/input on that target; an interrupted connection is not handback. Unrelated parent work remains available. Closing a viewer is not a request to stop or delete its target. Remote Watch/Pop out requires an explicit viewer tunnel, not a backend loopback URL.
@@ -96,6 +102,29 @@ The link carries a random, single-realm ticket after `#`, so the ticket is never
 
 - **Default:** `view` sees `$SSH_CONNECTION` and prints the exact tunnel command, for example `ssh -N -L 40123:127.0.0.1:40123 you@host`. Run that on the device you connected from, then open the link there. Nothing is exposed beyond what your SSH login already grants.
 - **Tailscale:** `view --tailnet` binds this machine's own Tailscale address (`100.64.0.0/10` only) instead, so the link opens directly on your other tailnet devices. Traffic is WireGuard-encrypted, and only your tailnet can reach the port. The ticket is still required. `--port N` fixes the port if your tailnet ACLs need one.
+
+### In the `hermes chat` footer
+
+On a Hermes with plugin footer items, the classic CLI shows this conversation's Realm under the
+composer once one is requested or running, for example `◈ omarchy realm · live` (amber when you
+have control or a review is pending, dim when stopped or setting up), with one row per Realm. Press
+`Down` on an empty composer to select a row (or click it with `display.cli_mouse`):
+
+| Key | Action |
+|---|---|
+| `Enter` / click | Show the Realm where it looks best. In a kitty-graphics terminal (kitty, Ghostty, WezTerm, but not inside tmux or screen, which drop the graphics) that is the live screen inside the terminal, view-only; `q` or `Esc` returns to the chat, `u` shows the browser link. Elsewhere it opens the browser viewer (the same link `/realm watch` makes), or shows the link when there is no graphical browser. |
+| `b` / `v` | The other place: `b` opens the browser from a kitty-graphics terminal; `v` shows the in-terminal view (truecolour half-blocks) from any other terminal. |
+| `s` | Screenshot (same as `/realm shot`); the footer shows the file path. |
+| `x` `x` | Stop the Realm and keep its workspace (press twice). |
+
+On a Hermes whose status bar shows plugin badges, the bar also carries a short read-only glyph
+while it matters: `◈ live`, `◈ control` when you have taken over, or `◈ review` when the chat
+needs `/realm review`. It hides on narrow terminals like the other optional segments; the row and
+its keys stay in the footer. Older Hermes ignores the badge.
+
+The footer is display only: nothing it shows reaches the conversation. It reads status at most
+every two seconds and never starts a desktop. Under `plugins.isolation: host` the terminal view is
+not offered.
 
 The legacy `default_mode` values now describe target availability, not the parent's execution environment. Explicit target failure never permits host-display fallback or bypassing human control, and existing approvals continue to apply.
 

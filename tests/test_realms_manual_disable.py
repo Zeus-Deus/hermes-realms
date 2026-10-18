@@ -42,7 +42,7 @@ def test_registered_agent_cannot_clear_disable_but_manual_reenable_can(tmp_path,
     owner = service.bind(session_origin="fresh", session_id="disabled-owner")
     peer = service.bind(session_origin="fresh", session_id="ordinary-peer")
     try:
-        assert json.loads(commands["realm"]("off", session_id=owner))["mode"] == "host"
+        assert json.loads(commands["realm"]("off --json", session_id=owner))["mode"] == "host"
         generation = service.owners.setup_generation(owner)
         result = json.loads(tools["realm"](
             {"action": "on", "kind": kind}, session_id=owner, _agent=False,
@@ -57,7 +57,7 @@ def test_registered_agent_cannot_clear_disable_but_manual_reenable_can(tmp_path,
             assert service.pre_tool(tool_name=name, args={}, session_id=owner) is None
         assert json.loads(tools["realm"]({"action": "on", "kind": "realm"}, session_id=peer))["mode"] == "realm"
         assert reopened.mode(owner, None) == "host"
-        assert json.loads(commands["realm"]("on " + kind, session_id=owner))["mode"] == "realm"
+        assert json.loads(commands["realm"]("on " + kind + " --json", session_id=owner))["mode"] == "realm"
         assert reopened.kind(owner, None) == kind
         assert not json.loads(tools["realm"]({"action": "on", "kind": kind}, session_id=owner)).get("error")
     finally:

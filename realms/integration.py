@@ -1052,11 +1052,18 @@ class RealmIntegration:
 
         return not get_profile_viewer(self.home).is_controlled(realm_id)
 
-    def stop(self, owner):
+    def stop(self, owner, *, only=None):
+        """Stop ``owner``'s realms; with ``only``, refuse unless that realm is still running.
+
+        ``only`` is checked under the activation guard, so a realm that replaced the one the
+        caller saw (a kind switch in another process) is never the one stopped.
+        """
         # Legacy owners may predate activation locks. Refuse before creating
         # one, then recheck after acquiring it before any authority change.
         self.manager.preflight_stop(owner)
         with self._lock, self.owners.activation_guard(owner):
+            if only is not None and not any(r["id"] == only for r in self._running_records(owner)):
+                raise ValueError("Realm is not running")
             self.manager.preflight_stop(owner)
             self.owners.setup_generation(owner, revoke=True)
             self._stop(owner)
