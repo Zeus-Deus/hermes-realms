@@ -252,6 +252,10 @@ def graphics_mode(environ=None):
     term, program = env.get("TERM", "").lower(), env.get("TERM_PROGRAM", "").lower()
     if program == "vscode":
         return "blocks"
+    # tmux/screen drop kitty graphics commands by default, even inside kitty: a pixel view
+    # would be blank there, so half-blocks it is.
+    if env.get("TMUX") or env.get("STY") or term.startswith(("tmux", "screen")):
+        return "blocks"
     if (env.get("KITTY_WINDOW_ID") or "kitty" in term or "ghostty" in term
             or program in ("ghostty", "wezterm") or env.get("WEZTERM_EXECUTABLE")):
         return "pixels"

@@ -140,7 +140,7 @@ def test_actions_act_only_on_this_sessions_realm(tmp_path, monkeypatch):
     watched, stopped = [], []
     monkeypatch.setattr(service, "watch", lambda o, rid: watched.append((o, rid)) or {
         "url": f"http://127.0.0.1:1/realms/{rid}/view#ticket=t"})
-    monkeypatch.setattr(service, "stop", lambda o: stopped.append(o))
+    monkeypatch.setattr(service, "stop", lambda o, only=None: stopped.append(o))
     result = footer.on_action("watch", {"session_id": "mine"}, LIVE)
     assert result["open_url"].startswith("http://127.0.0.1:") and watched == [(owner, LIVE)]
     with pytest.raises(ValueError, match="not running"):
@@ -163,7 +163,7 @@ def test_actions_on_a_retained_stopped_row_never_reach_the_live_realm(tmp_path, 
     monkeypatch.setattr(service, "records", lambda who: [retained] if who == owner else [])
     monkeypatch.setattr(service, "vm_records", lambda who: [vm] if who == owner else [])
     stopped, shots = [], []
-    monkeypatch.setattr(service, "stop", lambda o: stopped.append(o))
+    monkeypatch.setattr(service, "stop", lambda o, only=None: stopped.append(o))
     monkeypatch.setitem(type(service)._COMMANDS, "shot", lambda self, o, args, identity: shots.append(o) or {
         "realm_id": vm["id"], "path": "/realm/screen.png"})
     session = {"session_id": "mine"}
@@ -177,6 +177,66 @@ def test_actions_on_a_retained_stopped_row_never_reach_the_live_realm(tmp_path, 
     assert "stopped" in footer.on_action("stop", session, vm["id"])["notice"]
     assert footer.on_action("shot", session, vm["id"])["notice"].endswith("/realm/screen.png")
     assert stopped == [owner] and shots == [owner]
+
+
+def test_a_realm_replaced_after_the_row_check_is_never_stopped_or_captured(tmp_path, monkeypatch):
+    """The row is rechecked under the owner's activation lock, where a kind switch also runs."""
+    service = _service(tmp_path, monkeypatch)
+    footer = load("footer").FooterItem(service, ttl=0)
+    owner = service.bind(session_origin="fresh", session_id="mine")
+    regular = _live(service, owner, monkeypatch)
+    vm = {"id": "v-" + "d" * 24, "generation": "h" * 32, "session_id": owner, "status": "running"}
+    monkeypatch.setattr(service, "vm_records", lambda who: [vm] if who == owner else [])
+    torn_down, shots = [], []
+    monkeypatch.setattr(service, "_stop", lambda o: torn_down.append(o))
+    monkeypatch.setitem(type(service)._COMMANDS, "shot", lambda self, o, args, identity: shots.append(o) or {
+        "realm_id": vm["id"], "path": "/realm/screen.png"})
+    switch = service._running_records
+
+    def switched_after_first_check(who):
+        # Another process switches this chat to the VM right after the footer's first look.
+        monkeypatch.setattr(service, "_running_records", switch)
+        result = switch(who)
+        service.owners.set_kind(owner, "omarchy-vm")
+        return result
+
+    for action in ("stop", "shot"):
+        service.owners.set_kind(owner, "realm")
+        monkeypatch.setattr(service, "_running_records", switched_after_first_check)
+        with pytest.raises(ValueError, match="not running"):
+            footer.on_action(action, {"session_id": "mine"}, regular["id"])
+    assert torn_down == [] and shots == []
+
+
+def test_cached_snapshot_never_crosses_profiles(tmp_path, monkeypatch):
+    service = _service(tmp_path, monkeypatch)
+    footer = load("footer").FooterItem(service, ttl=60)
+    owner = service.bind(session_origin="fresh", session_id="mine")
+    _live(service, owner, monkeypatch)
+    assert footer.snapshot({"session_id": "mine", "hermes_home": str(service.home)}) is not None
+    assert footer.snapshot({"session_id": "mine", "hermes_home": str(tmp_path / "elsewhere")}) is None
+
+
+def test_conflicting_aliases_show_nothing(tmp_path, monkeypatch):
+    """session_id of chat A with stored_session_id of chat B must not pick either chat's realm."""
+    service = _service(tmp_path, monkeypatch)
+    footer = load("footer").FooterItem(service, ttl=0)
+    a = service.bind(session_origin="fresh", session_id="chat-a")
+    service.bind(session_origin="fresh", session_id="chat-b", stored_session_id="stored-b")
+    _live(service, a, monkeypatch)
+    assert footer.snapshot({"session_id": "chat-a"}) is not None
+    assert footer.snapshot({"session_id": "chat-a", "stored_session_id": "stored-b"}) is None
+
+
+def test_an_earlier_chat_awaiting_review_shows_review_without_a_desktop(tmp_path, monkeypatch):
+    """Its tools are held until /realm review, so the footer and badge say so even with no rows."""
+    service = _service(tmp_path, monkeypatch)
+    footer = load("footer").FooterItem(service, ttl=0)
+    owner = service.bind(session_id="earlier-chat")  # bound without session_origin: pre-upgrade
+    assert service.owners.permission(owner)["state"] == "legacy-pending"
+    item = footer.snapshot({"session_id": "earlier-chat"})
+    assert item is not None and item["label"].endswith("· review needed") and item["badge"] == "◈ review"
+    assert item["actions"] == []
 
 
 def test_real_discovery_paints_the_realm_in_the_hermes_footer(tmp_path, monkeypatch):

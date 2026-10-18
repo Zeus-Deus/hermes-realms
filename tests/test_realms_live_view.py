@@ -227,6 +227,15 @@ def test_halfblock_frame_paints_two_pixel_rows_per_cell():
     assert text.count("▀") == W
 
 
+def test_tmux_uses_half_blocks_even_inside_a_kitty_graphics_terminal():
+    """Default tmux drops kitty graphics commands, so pixels mode would paint a blank view."""
+    graphics_mode = load("live_view").graphics_mode
+    kitty = {"TERM": "xterm-kitty", "KITTY_WINDOW_ID": "1"}
+    assert graphics_mode(kitty) == "pixels"
+    assert graphics_mode({**kitty, "TERM": "tmux-256color", "TMUX": "/tmp/tmux-1000/default,1,0"}) == "blocks"
+    assert graphics_mode({"TERM": "screen-256color", "TERM_PROGRAM": "ghostty"}) == "blocks"
+
+
 def test_fit_keeps_the_screen_aspect_inside_the_terminal():
     live = load("live_view")
     cols, rows = live.fit(1920, 1080, columns=200, rows=50, cell_ratio=2.0)

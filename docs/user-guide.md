@@ -112,7 +112,7 @@ have control or a review is pending, dim when stopped or setting up), with one r
 
 | Key | Action |
 |---|---|
-| `Enter` / click | Show the Realm where it looks best. In a kitty-graphics terminal (kitty, Ghostty, WezTerm) that is the live screen inside the terminal, view-only; `q` or `Esc` returns to the chat, `u` shows the browser link. Elsewhere it opens the browser viewer (the same link `/realm watch` makes), or shows the link when there is no graphical browser. |
+| `Enter` / click | Show the Realm where it looks best. In a kitty-graphics terminal (kitty, Ghostty, WezTerm, but not inside tmux or screen, which drop the graphics) that is the live screen inside the terminal, view-only; `q` or `Esc` returns to the chat, `u` shows the browser link. Elsewhere it opens the browser viewer (the same link `/realm watch` makes), or shows the link when there is no graphical browser. |
 | `b` / `v` | The other place: `b` opens the browser from a kitty-graphics terminal; `v` shows the in-terminal view (truecolour half-blocks) from any other terminal. |
 | `s` | Screenshot (same as `/realm shot`); the footer shows the file path. |
 | `x` `x` | Stop the Realm and keep its workspace (press twice). |

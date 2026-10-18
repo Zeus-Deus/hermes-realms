@@ -62,9 +62,11 @@ def describe(status, setup_job=None, *, terminal_view=True, pixels=False):
     live = [row for row in rows if row.get("state") == "live"]
     kind = (live[0]["kind"] if live else status.get("requested_kind") or status.get("kind") or "realm")
     name = "◈ " + KIND_LABELS.get(kind, kind)
-    held = (status.get("permission") or {}).get("state", "optional") != "optional"
+    state = (status.get("permission") or {}).get("state", "optional")
+    held = state != "optional"
     setting_up = bool(setup_job) and setup_job.get("state") in ("running", "cancelling")
-    if not live and not setting_up and (
+    # A pending review holds every tool in this chat, desktop or not, so it always shows.
+    if not live and not setting_up and state != "legacy-pending" and (
             not status.get("requested") or held and not rows or status.get("mode") == "host"):
         return None
     # Readiness belongs to the kind this chat asked for, not to a retained row of another kind.
@@ -114,18 +116,33 @@ class FooterItem:
         self.pixels = self.terminal_view and graphics_mode() == "pixels"
 
     def owner(self, session):
-        """The owner this session's ids already resolve to; never binds a new one."""
+        """The owner this session's ids already resolve to; never binds a new one.
+
+        Every registered alias must agree: ids that resolve to two conversations are refused, as
+        the ownership store refuses them when bound together.
+        """
         owners = self.service.owners
+        found = set()
         for field, value in (("session_id", session.get("session_id")),
                              ("stored_session_id", session.get("stored_session_id")),
                              ("session_id", session.get("stored_session_id"))):
             if value:
                 owner = owners.resolve(allow_missing=True, **{field: value})
                 if owner is not None:
-                    return owner
-        return None
+                    found.add(owner)
+        if len(found) > 1:
+            raise OwnerError("Conflicting session owners")
+        return next(iter(found), None)
+
+    def _other_profile(self, session):
+        if not session.get("hermes_home"):
+            return False
+        from pathlib import Path
+        return Path(session["hermes_home"]).resolve() != self.service.home
 
     def snapshot(self, session):
+        if self._other_profile(session):
+            return None  # another profile's footer never shows this profile's realms, cached or not
         key = (session.get("session_id"), session.get("stored_session_id"))
         now = self._clock()
         with self._lock:
@@ -138,10 +155,8 @@ class FooterItem:
         return value
 
     def _read(self, session):
-        if session.get("hermes_home"):
-            from pathlib import Path
-            if Path(session["hermes_home"]).resolve() != self.service.home:
-                return None  # another profile's footer never shows this profile's realms
+        if self._other_profile(session):
+            return None
         try:
             owner = self.owner(session)
         except OwnerError:
@@ -170,16 +185,25 @@ class FooterItem:
         if action_id not in ("watch", "view", "shot", "stop"):
             raise ValueError(f"Unknown realm action {action_id!r}")
         identity = _identity(session)
-        owner = self.service.bind(**identity)
-        # Every row carries the item's actions; only the selected row's own live realm is a target,
-        # so a retained stopped row never stops or captures the realm that replaced it.
-        if not any(r["id"] == row_key for r in self.service._running_records(owner)):
-            raise ValueError("Realm is not running")
+        service = self.service
+        owner = service.bind(**identity)
+
+        def require_selected():
+            # Every row carries the item's actions; only the selected row's own live realm is a
+            # target, so a retained stopped row never stops or captures the realm that replaced it.
+            if not any(r["id"] == row_key for r in service._running_records(owner)):
+                raise ValueError("Realm is not running")
+
+        require_selected()
         if action_id == "stop":
-            self.service.stop(owner)
+            service.stop(owner, only=row_key)
             return {"notice": "Realm stopped; its workspace is kept"}
         if action_id == "shot":
-            shot = self.service.command("shot", **identity)
+            # Owner-wide like /realm shot, so recheck the row under the owner's activation lock:
+            # a kind switch or teardown in another process cannot slip in before the capture.
+            with service._lock, service.owners.activation_guard(owner):
+                require_selected()
+                shot = service.command("shot", **identity)
             return {"notice": f"Realm screenshot saved: {shot['path']}"}
         if action_id == "watch":
             return {"open_url": self.service.watch(owner, row_key)["url"], "notice": "Opening the Realm viewer"}
