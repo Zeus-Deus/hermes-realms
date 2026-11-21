@@ -42,7 +42,7 @@ The agent can discover the bundled `hermes-realms:realms` skill and existing Her
 Targets are owned by conversation, profile and connection, with generation/endpoint validation. Another conversation's resource is not a fallback. Regular Realms can access the existing host project filesystem; VM projects must be transferred explicitly.
 
 ## Setup and recovery
-The pinned driver installer supports **Linux x86-64 only**. A regular Realm needs labwc, Xwayland, WayVNC, grim, wlr-randr, bubblewrap, D-Bus/AT-SPI, a working systemd user manager and the appropriate renderer prerequisites. The plugin does not alter or reload host Hyprland configuration.
+The pinned driver installer supports **Linux x86-64 only**. A regular Realm needs labwc, `setpriv` (from util-linux), Xwayland, WayVNC, grim, wlr-randr, bubblewrap, D-Bus/AT-SPI, a working systemd user manager and the appropriate renderer prerequisites. Realms launches its private labwc without gaining file capabilities, leaving the host labwc binary and Hyprland configuration unchanged.
 
 An ordinary chat does not show a setup warning just because the plugin is enabled. When private testing is requested, ready prerequisites can be reused; otherwise the conversation offers the selected kind's setup action. The review distinguishes gateway-host packages from profile-local driver/base files. Supported Arch package installation uses native Polkit authorization, never a password in chat. Other hosts or missing KVM/key/privilege requirements may require an explicit blocker or administrator preparation.
 

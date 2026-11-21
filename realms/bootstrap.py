@@ -171,7 +171,11 @@ def worker(runtime):
     publish = shlex.join(
         [sys.executable, str(Path(__file__).resolve()), "publish", str(runtime)]
     )
-    spawn("compositor", ["labwc", "-V", "-C", str(labwc), "-s", publish])
+    # A distro may give labwc file capabilities (e.g. CAP_SYS_NICE). Letting
+    # it acquire them makes /proc/<pid>/fd unreadable to the Realm manager,
+    # so it cannot verify the private display socket. Keep the guard intact.
+    spawn("compositor", ["setpriv", "--no-new-privs", "--",
+                         "labwc", "-V", "-C", str(labwc), "-s", publish])
     published = runtime / "display.json"
     wait_until(published.exists, children)
     env.update(json.loads(published.read_text(encoding="utf-8")))

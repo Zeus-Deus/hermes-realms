@@ -362,6 +362,7 @@ def setup_status(*, driver_executable=None):
     missing.extend(
         name for name in (
                 "labwc",
+                "setpriv",
                 "Xwayland",
                 "wayvnc",
                 "dbus-daemon",

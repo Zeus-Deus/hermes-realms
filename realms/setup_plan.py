@@ -13,7 +13,7 @@ from .config import Config, KINDS, effective_home, vm_data_path
 from .install_driver import profile_target
 
 PACKAGES = {
-    "labwc": "labwc", "Xwayland": "xorg-xwayland", "wayvnc": "wayvnc",
+    "labwc": "labwc", "setpriv": "util-linux", "Xwayland": "xorg-xwayland", "wayvnc": "wayvnc",
     "dbus-daemon": "dbus", "systemd-run": "systemd", "systemd-inhibit": "systemd",
     "grim": "grim", "wlr-randr": "wlr-randr", "gdbus": "glib2", "bwrap": "bubblewrap",
     "/usr/lib/at-spi-bus-launcher": "at-spi2-core",
@@ -24,7 +24,7 @@ PACKAGES = {
     "curl": "curl", "gpg": "gnupg", "pacman": "pacman",
     "qemu-full": "qemu-full", "edk2-ovmf": "edk2-ovmf", "mtools": "mtools",
 }
-NATIVE_TOOLS = tuple(PACKAGES)[:12]
+NATIVE_TOOLS = tuple(PACKAGES)[:13]
 VM_TOOLS = ("qemu-system-x86_64", "qemu-img", "ssh", "scp", "socat", "jq",
             "mcopy", "mformat", "openssl", "systemd-run", "systemd-inhibit", "curl", "gpg", "pacman")
 
