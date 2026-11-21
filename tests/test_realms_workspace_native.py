@@ -28,6 +28,33 @@ def retired(record):
 
 @pytest.mark.integration
 @pytest.mark.platforms("linux")
+@pytest.mark.live_system_guard_bypass  # Only starts and stops this temporary profile's own scope.
+def test_private_compositor_does_not_gain_file_privileges(tmp_path):
+    manager = load("manager").Manager(tmp_path)
+    record = manager.start("private-compositor")
+    try:
+        # Exercise the normal ownership check, not just a startup receipt.
+        env = manager.env(record["id"])
+        assert env["XDG_RUNTIME_DIR"] == record["runtime_dir"]
+        pid = record["processes"]["compositor"]["pid"]
+        status = dict(
+            line.split(":", 1)
+            for line in Path(f"/proc/{pid}/status").read_text().splitlines()
+            if ":" in line
+        )
+        assert status["NoNewPrivs"].strip() == "1"
+        assert int(status["CapPrm"], 16) == int(status["CapEff"], 16) == 0
+        result = manager.exec(record["id"], ["/usr/bin/printf", "%s", "private"], wait=True)
+        assert result["returncode"] == 0 and result["stdout"] == "private"
+        image = Path(manager.shot(record["id"], tmp_path / "private.png"))
+        assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    finally:
+        manager.stop(record["id"])
+        retired(record)
+
+
+@pytest.mark.integration
+@pytest.mark.platforms("linux")
 def test_stop_restart_retains_private_bytes_and_owner(tmp_path):
     manager = load("manager").Manager(tmp_path)
     records = []

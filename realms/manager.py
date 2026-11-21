@@ -375,6 +375,7 @@ class Manager:
             name: shutil.which(name)
             for name in (
                 "labwc",
+                "setpriv",
                 "wayvnc",
                 "wlr-randr",
                 "grim",
