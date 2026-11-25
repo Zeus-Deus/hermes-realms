@@ -1,14 +1,30 @@
-"""Read-only admission checks; never reclaim other guests to admit a new one."""
+"""Read-only admission checks; never reclaim other guests to admit a new one.
+
+Standard library only: the VM owner guardian and setup children run under
+``python -I``, which does not see the dependencies Hermes adds for the plugin.
+"""
 from pathlib import Path
 import shutil
 
-import psutil
-
+MEMINFO = Path("/proc/meminfo")
 MIB = 1024 * 1024
 GIB = 1024 * MIB
 HOST_MEMORY_HEADROOM = 512 * MIB
 START_DISK_HEADROOM = 2 * GIB
 ISO_DISK_HEADROOM = 6 * GIB
+
+
+def _read_available_memory():
+    """The kernel's MemAvailable estimate in bytes (what psutil reports on Linux)."""
+    with MEMINFO.open(encoding="ascii") as stream:
+        for line in stream:
+            key, _, value = line.partition(":")
+            if key == "MemAvailable":
+                amount, unit = value.split()
+                if unit != "kB":
+                    raise ValueError("unexpected MemAvailable unit")
+                return int(amount) * 1024
+    raise ValueError("MemAvailable is missing")
 
 
 def inspect_resources(config, path, *, install=False):
@@ -19,8 +35,8 @@ def inspect_resources(config, path, *, install=False):
     blockers = []
     available_memory = available_disk = None
     try:
-        available_memory = psutil.virtual_memory().available
-    except (OSError, psutil.Error):
+        available_memory = _read_available_memory()
+    except (OSError, ValueError):
         blockers.append("Cannot inspect available host memory; retry before allocating a VM.")
     try:
         target = Path(path).resolve()
