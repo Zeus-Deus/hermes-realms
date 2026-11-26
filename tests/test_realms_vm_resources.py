@@ -2,14 +2,21 @@
 from contextlib import nullcontext
 from pathlib import Path
 import runpy
+import subprocess
+import sys
 from types import SimpleNamespace
 
-import psutil
 import pytest
 from realms_test_paths import PLUGIN_ROOT
 
 load = runpy.run_path(str(PLUGIN_ROOT / "realms/_binding.py"))["load_runtime"]
 pytestmark = pytest.mark.platforms("linux")
+
+
+def _meminfo(tmp_path, monkeypatch, text):
+    path = tmp_path / "meminfo"
+    path.write_text(text, encoding="ascii")
+    monkeypatch.setattr(load("vm_resources"), "MEMINFO", path)
 
 
 @pytest.mark.parametrize("resource", ["memory", "disk"])
@@ -19,7 +26,8 @@ def test_pressure_refuses_new_allocation_before_side_effects(tmp_path, monkeypat
     manager = vm.VmManager(tmp_path / "profile")
     allocation_dir = manager.registry.root / "vm" if operation == "start" else manager.data
     allocation_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(available=0 if resource == "memory" else 2**60))
+    available_kib = 0 if resource == "memory" else 2**40
+    _meminfo(tmp_path, monkeypatch, f"MemTotal:       {2**41} kB\nMemAvailable:   {available_kib} kB\n")
     monkeypatch.setattr(vm.shutil, "disk_usage", lambda path: SimpleNamespace(
         free=0 if resource == "disk" and Path(path) == allocation_dir else 2**60))
     monkeypatch.setattr(manager, "_reconcile_locked", lambda: None)
@@ -54,6 +62,63 @@ def test_pressure_does_not_prevent_reusing_the_existing_generation(tmp_path, mon
     monkeypatch.setattr(manager, "_reconcile_locked", lambda: None)
     monkeypatch.setattr(manager, "_bind_to_owner", lambda _: None)
     monkeypatch.setattr(vm, "unit_active", lambda _: True)
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(available=0))
+    _meminfo(tmp_path, monkeypatch, "MemAvailable:          0 kB\n")
     monkeypatch.setattr(vm.shutil, "disk_usage", lambda _: SimpleNamespace(free=0))
     assert manager.start("owner")["id"] == record["id"]
+
+
+def test_available_memory_is_the_kernels_estimate(tmp_path):
+    """The live /proc/meminfo is what admission measures, in bytes."""
+    report = load("vm_resources").inspect_resources(load("config").Config(), tmp_path)
+    kernel = next(int(line.split()[1]) * 1024 for line in
+                  Path("/proc/meminfo").read_text(encoding="ascii").splitlines()
+                  if line.startswith("MemAvailable:"))
+    # Both reads are live; allow ordinary churn between them, not a unit error.
+    assert abs(report["available_memory_bytes"] - kernel) < 256 * 1024 * 1024
+    assert report["available_memory_bytes"] > 1024 * 1024
+
+
+@pytest.mark.parametrize("text", ["MemTotal: 1 kB\n", "MemAvailable: lots kB\n", "MemAvailable: 9 MB\n", ""])
+def test_unreadable_memory_estimate_blocks_allocation(tmp_path, monkeypatch, text):
+    _meminfo(tmp_path, monkeypatch, text)
+    report = load("vm_resources").inspect_resources(load("config").Config(), tmp_path)
+    assert report["ready"] is False and report["available_memory_bytes"] is None
+    assert "Cannot inspect available host memory" in " ".join(report["blockers"])
+
+
+def test_missing_meminfo_blocks_allocation(tmp_path, monkeypatch):
+    monkeypatch.setattr(load("vm_resources"), "MEMINFO", tmp_path / "absent")
+    report = load("vm_resources").inspect_resources(load("config").Config(), tmp_path)
+    assert report["ready"] is False
+    assert "Cannot inspect available host memory" in " ".join(report["blockers"])
+
+
+# Each of these is the import root of a ``python -I`` child Realms spawns (the VM
+# owner guardian imports vm_manager lazily through vm_owner_lifetime._binding;
+# the vendored installer's progress hook loads setup_flow).
+# Hermes supplies plugin dependencies on the parent's import path only, so these
+# children see nothing but the standard library.
+@pytest.mark.parametrize("module", ["vm_owner_guard", "vm_manager", "setup_worker", "setup_flow",
+                                    "setup_process", "vm_driver_lifetime"])
+def test_isolated_children_import_with_only_the_standard_library(module):
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-B", "-c",
+         "import runpy, sys; runpy.run_path(sys.argv[1])['load_runtime'](sys.argv[2])",
+         str(PLUGIN_ROOT / "realms/_binding.py"), module],
+        cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+
+
+def test_owner_guardian_entry_reaches_ownership_checks_without_dependencies():
+    """The guardian as systemd runs it: script path, -I, a binding argument.
+
+    An invalid binding must be refused by ownership validation, which is only
+    reachable once the guardian's whole lazy import chain has loaded.
+    """
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-B", str(PLUGIN_ROOT / "realms/vm_owner_guard.py"), '{"generation": "x"}'],
+        cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "INVOCATION_ID": "0" * 32},
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0
+    assert "OwnershipError: invalid realm generation" in result.stderr, result.stderr

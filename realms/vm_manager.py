@@ -898,7 +898,17 @@ class VmManager:
 
         # The vendor waits for SSH after detaching QEMU. Arm the dependency
         # before invoking it, not after that potentially minutes-long wait.
-        install(record, before_start=before_start)
+        try:
+            install(record, before_start=before_start)
+        except BaseException:
+            # QEMU starts only in the vendor launch below; install() also refuses
+            # when this generation's unit already exists. Either way this call
+            # booted nothing. Keep a never-enrolled clone resumable instead of
+            # stranding it as incomplete; a workspace that booted before keeps
+            # its strict host-key pin.
+            if not record.get("ssh_host_key_pinned"):
+                record["launch_pending"] = True
+            raise
         self.registry.put(record)
         runtime = Path(record["runtime_dir"])
         self._run_script(
